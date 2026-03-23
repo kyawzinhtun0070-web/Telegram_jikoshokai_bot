@@ -57,8 +57,7 @@ def send_welcome(message):
         )
         bot.send_message(ADMIN_ID, alert_msg, parse_mode="Markdown")
     except:
-        pass
-    show_main_menu(message.chat.id, "🎉 မင်္ဂလာပါ၊ **J.F.Y JIKOSHOKAI FOR YOU** Bot မှ ကြိုဆိုပါတယ်။")
+      JIKOSHOKAI show_main_menu(message.chat.id, "🎉 မင်္ဂလာပါ၊ **J.F.Y Myanmar** မှ ကြိုဆိုပါတယ်။ မိမိကိုယ်ကိုယ်မိတ်ဆက်နည်း ရေးပေးရမလားခဗျာ✨ ")
 
 def show_main_menu(chat_id, text):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
