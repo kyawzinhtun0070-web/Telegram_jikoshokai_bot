@@ -28,7 +28,7 @@ HOBBIES = {
     "အားကစားလုပ်ခြင်း": {"jp": "趣味はスポーツをすることです。", "mm": "ဝါသနာကတော့ အားကစားလုပ်ခြင်း ဖြစ်ပါတယ်။"},
     "ခရီးသွားခြင်း": {"jp": "趣味は旅行することです。", "mm": "ဝါသနာကတော့ ခရီးသွားခြင်း ဖြစ်ပါတယ်။"},
     "ဟင်းချက်ခြင်း": {"jp": "趣味は料理を作ることです。", "mm": "ဝါသနာကတော့ ဟင်းချက်ခြင်း ဖြစ်ပါတယ်။"},
-    "ဂိမ်းကစားခြင်း": {"jp": "趣味はゲームをすることです。", "mm": "ဝါသနာကတော့ ဂိမ်းကစားခြင်း ဖြစ်ပါတယ်။"},
+    "ဂိမ်းကစားခြင်း": {"jp": "趣味はゲームကိုすることです。", "mm": "ဝါသနာကတော့ ဂိမ်းကစားခြင်း ဖြစ်ပါတယ်။"},
     "ဓာတ်ပုံရိုက်ခြင်း": {"jp": "趣味は写真を撮ることです。", "mm": "ဝါသနာကတော့ ဓာတ်ပုံရိုက်ခြင်း ဖြစ်ပါတယ်။"},
     "ပန်းချီဆွဲခြင်း": {"jp": "趣味は絵を描くことです。", "mm": "ဝါသနာကတော့ ပန်းချီဆွဲခြင်း ဖြစ်ပါတယ်။"},
     "ဘာသာစကားလေ့လာခြင်း": {"jp": "趣味は外国語を勉強することです。", "mm": "ဝါသနာကတော့ ဘာသာစကားလေ့လာခြင်း ဖြစ်ပါတယ်။"}
@@ -37,7 +37,7 @@ HOBBIES = {
 FIELDS = {
     "စိုက်ပျိုးရေး": {"jp": "農業", "mm": "စိုက်ပျိုးရေးလုပ်ငန်း"},
     "သက်ကြီးစောင့်ရှောက်ရေး (Kaigo)": {"jp": "介護", "mm": "သက်ကြီးရွယ်အိုစောင့်ရှောက်ရေးလုပ်ငန်း"},
-    "စားသောက်ဆိုင် (Gaisyoku)": {"jp": "外食産業", "mm": "စားသောက်ဆိုင်လုပ်ငန်း"},
+    "စားသောက်ဆိုင် (Gaishoku)": {"jp": "外食産業", "mm": "စားသောက်ဆိုင်လုပ်ငန်း"},
     "အစားအသောက်ထုတ်လုပ်ရေး": {"jp": "飲食料品製造業", "mm": "အစားအသောက်ထုတ်လုပ်ရေးလုပ်ငန်း"},
     "ဆောက်လုပ်ရေး": {"jp": "建設業", "mm": "ဆောက်လုပ်ရေးလုပ်ငန်း"},
     "ဟိုတယ်လုပ်ငန်း (Shukuhaku)": {"jp": "宿泊業", "mm": "ဟိုတယ်လုပ်ငန်း"},
@@ -88,13 +88,13 @@ def handle_main_menu(message):
         else:
             bot.send_message(chat_id, "⚠️ အချက်အလက်များ မဖြည့်ရသေးပါ။ ကျေးဇူးပြု၍ '📝 Jikoshokai ဖန်တီးမယ်' ကို အရင်နှိပ်ပါ။")
 
-# --- 2. Information Gathering ---
+# --- 2. Information Gathering (Step-by-Step) ---
 def ask_name(chat_id):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
     old_val = user_data[chat_id].get('name')
     if old_val:
         markup.add(SKIP_BTN)
-        msg = f"၁။ သင့်နာမည် ဘယ်လိုခေါ်ပါသလဲ？ (ဥပမာ - Kyaw Kyaw)\n\n*(ယခင်ဖြည့်ထားသော နာမည်: {old_val})*"
+        msg = f"၁။ သင့်နာမည် ဘယ်လိုခေါ်ပါသလဲ？ (ဥပမာ - Kyaw Kyaw)\n\n*(ယခင်: {old_val})*"
     else:
         markup = types.ReplyKeyboardRemove()
         msg = "၁။ သင့်နာမည် ဘယ်လိုခေါ်ပါသလဲ？ (ဥပမာ - Kyaw Kyaw)"
@@ -112,7 +112,7 @@ def ask_age(chat_id):
     old_val = user_data[chat_id].get('age')
     if old_val:
         markup.add(SKIP_BTN)
-        msg = f"၂။ အသက် ဘယ်လောက်ပါလဲ？ (ဥပမာ - 25)\n\n*(ယခင်ဖြည့်ထားသော အသက်: {old_val})*"
+        msg = f"၂။ အသက် ဘယ်လောက်ပါလဲ？ (ဥပမာ - 25)\n\n*(ယခင်: {old_val})*"
     else:
         markup = types.ReplyKeyboardRemove()
         msg = "၂။ အသက် ဘယ်လောက်ပါလဲ？ (ဥပမာ - 25)"
@@ -130,7 +130,7 @@ def ask_city(chat_id):
     old_val = user_data[chat_id].get('city')
     if old_val:
         markup.add(SKIP_BTN)
-        msg = f"၃။ မြန်မာနိုင်ငံရဲ့ ဘယ်မြို့မှာ နေထိုင်ပါသလဲ？ (ဥပမာ - Yangon)\n\n*(ယခင်ဖြည့်ထားသော မြို့: {old_val})*"
+        msg = f"၃။ မြန်မာနိုင်ငံရဲ့ ဘယ်မြို့မှာ နေထိုင်ပါသလဲ？ (ဥပမာ - Yangon)\n\n*(ယခင်: {old_val})*"
     else:
         markup = types.ReplyKeyboardRemove()
         msg = "၃။ မြန်မာနိုင်ငံရဲ့ ဘယ်မြို့မှာ နေထိုင်ပါသလဲ？ (ဥပမာ - Yangon)"
@@ -146,15 +146,15 @@ def process_city(message):
 def ask_level(chat_id):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
     buttons = list(LEVELS.keys())
-    old_val = user_data[chat_id].get('level')
-    if old_val: buttons.insert(0, SKIP_BTN)
+    if user_data[chat_id].get('level'): buttons.insert(0, SKIP_BTN)
     markup.add(*buttons)
     bot.send_message(chat_id, "၄။ လက်ရှိ ဂျပန်စာ Level ကို ရွေးပေးပါ👇", reply_markup=markup)
     bot.register_next_step_handler_by_chat_id(chat_id, process_level)
 
 def process_level(message):
     chat_id = message.chat.id
-    if message.text in LEVELS: user_data[chat_id]['level'] = message.text
+    if message.text in LEVELS:
+        user_data[chat_id]['level'] = message.text
     ask_hobby(chat_id)
 
 def ask_hobby(chat_id):
@@ -167,7 +167,8 @@ def ask_hobby(chat_id):
 
 def process_hobby(message):
     chat_id = message.chat.id
-    if message.text in HOBBIES: user_data[chat_id]['hobby'] = message.text
+    if message.text in HOBBIES:
+        user_data[chat_id]['hobby'] = message.text
     ask_field(chat_id)
 
 def ask_field(chat_id):
@@ -180,7 +181,8 @@ def ask_field(chat_id):
 
 def process_field(message):
     chat_id = message.chat.id
-    if message.text in FIELDS: user_data[chat_id]['field'] = message.text
+    if message.text in FIELDS:
+        user_data[chat_id]['field'] = message.text
     ask_version(chat_id)
 
 def ask_version(chat_id):
@@ -188,11 +190,10 @@ def ask_version(chat_id):
     markup.add("Short Version", "Long Version")
     bot.send_message(chat_id, "✅ အချက်အလက်များ ပြည့်စုံသွားပါပြီ။ မည်သည့် Version ကို လိုချင်ပါသလဲ？👇", reply_markup=markup)
 
-# --- 3. Result Generation ---
+# --- 3. Final Result ---
 def generate_result(chat_id, version):
     data = user_data.get(chat_id, {})
     n, a, c = data.get('name',''), data.get('age',''), data.get('city','')
-    
     l_jp = LEVELS.get(data.get('level'), {}).get('jp', '')
     l_mm = LEVELS.get(data.get('level'), {}).get('mm', '')
     h_jp = HOBBIES.get(data.get('hobby'), {}).get('jp', '')
@@ -201,20 +202,14 @@ def generate_result(chat_id, version):
     f_mm = FIELDS.get(data.get('field'), {}).get('mm', '')
 
     if version == "Short Version":
-        result_text = f"📝 **Short Version (အမြန်မိတ်ဆက်ခြင်း)**\n━━━━━━━━━━━━━━━━━━━━━\n\n🇯🇵 **日本語**\nはじめまして。✨\n{n}と申します।👤\n年齢は{a}歳です।🎂\nミャンマーの{c}に住んでいます।🇲🇲\nどうぞよろしくお願いいたします।🙇‍♂️\n\n🇲🇲 **မြန်မာအဓိပ္ပာယ်**\nတွေ့ရတာ ဝမ်းသာပါတယ်။ ✨\nကျွန်တော်/ကျွန်မကတော့ {n} လို့ ခေါ်ပါတယ်။ 👤\nအသက်ကတော့ {a} နှစ် ဖြစ်ပါတယ်။ 🎂\nမြန်မာနိုင်ငံ၊ {c} မှာ နေထိုင်ပါတယ်။ 🇲🇲\nရှေ့ဆက်ပြီး ကူညီစောင့်ရှောက်ပေးဖို့ တောင်းဆိုအပ်ပါတယ်။ 🙇‍♂️"
+        res = f"📝 **Short Version (အမြန်မိတ်ဆက်ခြင်း)**\n━━━━━━━━━━━━━━━━━━━━━\n\n🇯🇵 **日本語**\nはじめまして。✨\n{n}と申します।👤\n年齢は{a}歳です।🎂\nミャンマーの{c}に住んでいます।🇲🇲\nどうぞよろしくお願いいたします।🙇‍♂️\n\n🇲🇲 **မြန်မာအဓိပ္ပာယ်**\nတွေ့ရတာ ဝမ်းသာပါတယ်။ ကျွန်တော်ကတော့ {n} လို့ ခေါ်ပါတယ်။ အသက် {a} နှစ်ဖြစ်ပြီး {c} မြို့မှာ နေထိုင်ပါတယ်။"
     else:
-        result_text = f"📝 **Long Version (အပြည့်အစုံမိတ်ဆက်ခြင်း)**\n━━━━━━━━━━━━━━━━━━━━━\n\n🇯🇵 **日本語**\nはじめまして।✨\n{n}と申します।👤\n年齢は{a}歳です।🎂\nミャンマーの{c}に住んでいます।🇲🇲\n{l_jp} 🎓\n{h_jp} 🎬\n日本の高い技術を学びたいと思い、{f_jp}に興味を持っています।🌱\n本日は面接の機会をいただき、誠にありがとうございます।🙏\n採用していただきましたら၊ 一生懸命頑張ります।💪\nどうぞよろしくお願いいたします।🙇‍♂️\n\n🇲🇲 **မြန်မာအဓိပ္ပာယ်**\nတွေ့ရတာ ဝမ်းသာပါတယ်။ ✨\nကျွန်တော်/ကျွန်မကတော့ {n} လို့ ခေါ်ပါတယ်။ 👤\nအသက်ကတော့ {a} နှစ် ဖြစ်ပါတယ်။ 🎂\nမြန်မာနိုင်ငံ၊ {c} မှာ နေထိုင်ပါတယ်။ 🇲🇲\n{l_mm} 🎓\n{h_mm} 🎬\nဂျပန်ရဲ့ အဆင့်မြင့်နည်းပညာတွေကို သင်ယူချင်တဲ့အတွက် {f_mm} ကို စိတ်ဝင်စားပါတယ်။ 🌱\nဒီနေ့ အင်တာဗျူး ဖြေဆိုခွင့်ရတဲ့အတွက် ကျေးဇူးအများကြီးတင်ပါတယ်။ 🙏\nအလုပ်ရွေးချယ်ခံရရင် အစွမ်းကုန် ကြိုးစားသွားပါမယ်। 💪\nကူညီစောင့်ရှောက်ပေးဖို့ တောင်းဆိုအပ်ပါတယ်။ 🙇‍♂️"
+        res = f"📝 **Long Version (အပြည့်အစုံမိတ်ဆက်ခြင်း)**\n━━━━━━━━━━━━━━━━━━━━━\n\n🇯🇵 **日本語**\nはじめまして।✨\n{n}と申します।👤\n年齢は{a}歳です।🎂\nミャンマーの{c}に住んでいます।🇲🇲\n{l_jp} 🎓\n{h_jp} 🎬\n日本の高い技術を学びたいと思い、{f_jp}に興味を持っています।🌱\n本日は面接の機会をいただき、誠にありがとうございます।🙏\n採用していただきましたら၊ 一生懸命頑張ります।💪\nどうぞよろしくお願いいたします।🙇‍♂️\n\n🇲🇲 **မြန်မာအဓိပ္ပာယ်**\n{l_mm} {h_mm} ဂျပန်ရဲ့ {f_mm} ကို စိတ်ဝင်စားပါတယ်။ အင်တာဗျူးခွင့်ရလို့ ကျေးဇူးတင်ပါတယ်။ အစွမ်းကုန် ကြိုးစားပါမယ်။"
 
-    bot.send_message(chat_id, result_text, parse_mode="Markdown")
-    
+    bot.send_message(chat_id, res, parse_mode="Markdown")
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    if version == "Short Version":
-        markup.add("Long Version", "📝 Jikoshokai ဖန်တီးမယ် / ပြင်မယ်")
-    else:
-        markup.add("Short Version", "📝 Jikoshokai ဖန်တီးမယ် / ပြင်မယ်")
-    
-    markup.add("🏠 ပင်မစာမျက်နှာသို့")
-    bot.send_message(chat_id, "👇 အခြား Version ပြောင်းကြည့်ရန် သို့မဟုတ် အချက်အလက်များ ပြန်ပြင်ရန် အောက်ပါခလုတ်များကို နှိပ်ပါ။", reply_markup=markup)
+    markup.add("Long Version" if version == "Short Version" else "Short Version", "📝 Jikoshokai ဖန်တီးမယ် / ပြင်မယ်", "🏠 ပင်မစာမျက်နှာသို့")
+    bot.send_message(chat_id, "👇 အောက်ပါခလုတ်များကို အသုံးပြုနိုင်ပါတယ်။", reply_markup=markup)
 
 if __name__ == "__main__":
     bot.infinity_polling()
