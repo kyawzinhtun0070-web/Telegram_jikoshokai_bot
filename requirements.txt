@@ -1,3 +1,2 @@
-pyTelegramBotAPI
-schedule
-pytz
+python-telegram-bot
+yt-dlp
