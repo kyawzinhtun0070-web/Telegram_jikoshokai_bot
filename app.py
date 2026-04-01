@@ -1,14 +1,15 @@
 import os
 import asyncio
 import logging
+import traceback
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import yt_dlp
 
 # --- Config ---
 TOKEN = '8659166008:AAGEI5f61PsG6wd5ciKEazmqtiRiycDTYbI'
-ADMIN_ID = '6131831207'
-STORAGE_CHANNEL_ID = -1003649365692
+ADMIN_ID = 6131831207 # Integer
+STORAGE_CHANNEL_ID = -1003649365692 # Integer
 MAIN_CHANNEL = '@linktovideodownloadermm'
 AD_LINK = 'https://www.profitablecpmratenetwork.com/iea7hf0n?key=3f50007692900d40cca3bb9bc6aee189'
 
@@ -21,7 +22,7 @@ async def check_joined(user_id, context):
         return member.status not in ['left', 'kicked']
     except: return True
 
-# Sensei စိတ်ကြိုက် Greeting ပုံစံ
+# Greeting ပုံစံအဟောင်း
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         "👋 မင်္ဂလာပါ!\n\n"
@@ -39,10 +40,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not url.startswith("http"): return
 
     # Admin Noti
-    try: await context.bot.send_message(chat_id=ADMIN_ID, text=f"🔔 User: {user.first_name}\n🔗 Link: {url}")
+    try: await context.bot.send_message(chat_id=ADMIN_ID, text=f"🔔 User: {user.first_name}\n🆔 ID: {user.id}\n🔗 Link: {url}")
     except: pass
 
-    # Force Join
+    # Force Join Check
     if not await check_joined(user.id, context):
         keyboard = [[InlineKeyboardButton("📢 Channel Join ရန်", url=f"https://t.me/{MAIN_CHANNEL[1:]}")]]
         await update.message.reply_text("ဗီဒီယိုဒေါင်းရန် Channel ကို အရင် Join ပေးပါ။", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -62,20 +63,22 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data.startswith("get_"):
         msg_id = query.data.split("_")[1]
         
-        # ၁။ ကြော်ငြာ Link ကို Popup အနေနဲ့ တန်းပွင့်ခိုင်းမယ် (ဒါမှ ဝင်ငွေရမှာပါ)
-        await query.answer(url=AD_LINK) 
+        # ၁။ "ပို့ပေးနေပြီ" လို့ Toast message ပြမယ်
+        await query.answer("ဗီဒီယိုကို ပို့ပေးနေပါပြီ... ခဏစောင့်ပါ။", show_alert=False)
         
-        # ၂။ ဗီဒီယိုကို User ဆီ တန်းပို့ပေးမယ်
+        # ၂။ ဗီဒီယိုကို User ဆီ တိုက်ရိုက် Copy ကူးပို့ပေးမယ်
         try:
             await context.bot.copy_message(
                 chat_id=user_id,
                 from_chat_id=STORAGE_CHANNEL_ID,
                 message_id=int(msg_id),
-                caption="✅ ဒေါင်းလုဒ် ရပါပြီ။ ကျေးဇူးတင်ပါသည်။"
+                caption="✅ ဒေါင်းလုဒ် ရပါပြီ။\n\n🙏 Bot အတွက် အောက်ကကြော်ငြာကို ၅ စက္ကန့်ကြည့်ပေးပါဦး။",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📺 ကြော်ငြာကြည့်ရန်", url=AD_LINK)]])
             )
             await query.message.delete()
-        except:
-            await query.message.reply_text("❌ အမှားအယွင်းရှိပါသည်။ Link ကို ပြန်ပို့ပေးပါ။")
+        except Exception as e:
+            logging.error(f"Error: {e}")
+            await query.message.reply_text("❌ ဖိုင်ထုတ်မရပါ။ Bot ကို Storage Channel တွင် Admin ခန့်ထားပါ သို့မဟုတ် Link ပြန်ပို့ပေးပါ။")
         return
 
     # ဒေါင်းလုဒ်ဆွဲသည့်အပိုင်း
@@ -86,14 +89,14 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         m_type = 'video' if query.data == 'dl_video' else 'audio'
-        ydl_opts = {
-            'format': 'best' if m_type == 'video' else 'bestaudio/best',
-            'outtmpl': f'dl_{user_id}.%(ext)s', 'quiet': True
-        }
+        ydl_opts = {'format': 'best', 'outtmpl': f'dl_{user_id}.%(ext)s', 'quiet': True}
+        
+        # ဒေါင်းလုဒ်ဆွဲခြင်း
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             file_path = ydl.prepare_filename(info)
 
+        # Storage Channel သို့ ပို့ခြင်း
         with open(file_path, 'rb') as f:
             if m_type == 'video': sent = await context.bot.send_video(chat_id=STORAGE_CHANNEL_ID, video=f)
             else: sent = await context.bot.send_audio(chat_id=STORAGE_CHANNEL_ID, audio=f)
@@ -101,12 +104,13 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if os.path.exists(file_path): os.remove(file_path)
 
-        # ခလုတ်တစ်ခုတည်း ပေါင်းပေးလိုက်ခြင်း
-        # နှိပ်လိုက်တာနဲ့ query.answer(url=AD_LINK) ကြောင့် ကြော်ငြာဆီသွားဖို့ မေးပါလိမ့်မယ်
-        keyboard = [[InlineKeyboardButton("🚀 ဗီဒီယိုရယူရန် (ကြော်ငြာကြည့်ပေးပါ)", callback_data=f"get_{storage_msg_id}")]]
+        # ခလုတ်တစ်ခုတည်းဖြင့် ပြန်စာပို့ခြင်း
+        keyboard = [[InlineKeyboardButton("🚀 ဗီဒီယိုရယူရန်", callback_data=f"get_{storage_msg_id}")]]
         await query.edit_message_text("✅ အဆင်သင့်ဖြစ်ပါပြီ။ အောက်ကခလုတ်ကို နှိပ်ပြီး ရယူပါ။", reply_markup=InlineKeyboardMarkup(keyboard))
 
-    except Exception as e:
+    except Exception:
+        err = traceback.format_exc()
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f"❌ **Error Detail:**\n`{err[:3000]}`")
         await query.edit_message_text("❌ ဒေါင်းလုဒ်ဆွဲ၍ မရပါ။ Link ပြန်စစ်ပေးပါ။")
 
 if __name__ == '__main__':
@@ -115,4 +119,3 @@ if __name__ == '__main__':
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     app.add_handler(CallbackQueryHandler(button_click))
     app.run_polling()
-
