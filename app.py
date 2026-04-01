@@ -9,7 +9,7 @@ import yt_dlp
 # --- Config ---
 TOKEN = '8659166008:AAGEI5f61PsG6wd5ciKEazmqtiRiycDTYbI'
 ADMIN_ID = '6131831207'
-STORAGE_CHANNEL_ID = '-1003649365692'
+STORAGE_CHANNEL_ID = -1003649365692  # Channel ID ကို ကိန်းဂဏန်းအဖြစ်ပဲ ထားပါ
 MAIN_CHANNEL = '@linktovideodownloadermm'
 AD_LINK = 'https://www.profitablecpmratenetwork.com/iea7hf0n?key=3f50007692900d40cca3bb9bc6aee189'
 
@@ -22,97 +22,87 @@ async def check_joined(user_id, context):
     except: return True
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_text = (
-        "👋 မင်္ဂလာပါ!\n\n"
-        "Social Media များမှ ဗီဒီယိုနှင့် အသံများကို ဒေါင်းလုဒ်ဆွဲပေးမည့် Bot ပါ။\n"
-        "📥 ဒေါင်းလုဒ်ဆွဲလိုသော Link ကို ပို့ပေးလိုက်ပါ ခင်ဗျာ။"
-    )
-    await update.message.reply_text(welcome_text)
+    await update.message.reply_text(f"မင်္ဂလာပါ {update.effective_user.first_name}။ ဗီဒီယို Link ပို့ပေးပါ။")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     url = update.message.text
     if not url.startswith("http"): return
 
-    # Admin Noti (ဘယ်သူသုံးနေလဲ သိရအောင်)
-    admin_msg = f"🔔 **User Activity**\n👤 အမည်: {user.first_name}\n🆔 ID: `{user.id}`\n🔗 Link: {url}"
-    try: await context.bot.send_message(chat_id=ADMIN_ID, text=admin_msg, parse_mode="Markdown")
+    # Admin Noti
+    try: await context.bot.send_message(chat_id=ADMIN_ID, text=f"🔔 User: {user.first_name}\n🔗 Link: {url}")
     except: pass
 
-    # Force Join စစ်ဆေးခြင်း
     if not await check_joined(user.id, context):
         keyboard = [[InlineKeyboardButton("📢 Channel Join ရန်", url=f"https://t.me/{MAIN_CHANNEL[1:]}")]]
-        await update.message.reply_text("ဗီဒီယိုဒေါင်းရန် ကျွန်တော်တို့၏ Channel ကို အရင် Join ပေးပါ။", reply_markup=InlineKeyboardMarkup(keyboard))
+        await update.message.reply_text("Channel အရင် Join ပေးပါ။", reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
+    # ဒေါင်းလုဒ်ဆွဲရန် ရွေးခိုင်းခြင်း
     context.user_data['last_url'] = url
     keyboard = [[InlineKeyboardButton("📹 ဗီဒီယို ယူမယ်", callback_data="dl_video"),
                  InlineKeyboardButton("🎵 အသံ (Audio) ယူမယ်", callback_data="dl_audio")]]
-    await update.message.reply_text("👇 ဘယ်လိုပုံစံ ဒေါင်းလုဒ်ဆွဲချင်ပါသလဲ ရွေးပေးပါ။", reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text("👇 ဘယ်လိုပုံစံ ဒေါင်းလုဒ်ဆွဲချင်ပါသလဲ?", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
-    action = query.data
     user_id = query.from_user.id
-
-    # ဖိုင်ပြန်ထုတ်ပေးသည့်အပိုင်း
-    if action == "get_file":
-        file_id = context.user_data.get('temp_id')
-        media_type = context.user_data.get('temp_type')
-        
-        if not file_id:
-            await query.message.reply_text("❌ စနစ်ကြောင့် ဖိုင်မှတ်ဉာဏ် ပျောက်သွားပါသည်။ Link ကို ပြန်ပို့ပေးပါ။")
-            return
-
+    
+    # ၁-ကလစ်ဖြင့် ဖိုင်ထုတ်ပေးခြင်း
+    if query.data.startswith("send_"):
+        storage_msg_id = query.data.split("_")[1]
         try:
-            if media_type == "video": await query.message.reply_video(video=file_id, caption="ဗီဒီယို ရပါပြီ။")
-            else: await query.message.reply_audio(audio=file_id, caption="အသံဖိုင် ရပါပြီ။")
+            # ၁။ ဖိုင်ကို User ဆီ ပို့ပေးမယ်
+            await context.bot.copy_message(
+                chat_id=user_id,
+                from_chat_id=STORAGE_CHANNEL_ID,
+                message_id=int(storage_msg_id),
+                caption="✅ ဒေါင်းလုဒ် ရပါပြီ။\n\n🙏 Bot ရေရှည်ရပ်တည်နိုင်ဖို့ အောက်ကကြော်ငြာကို ၅ စက္ကန့်ကြည့်ပေးပါ။",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📺 ကြော်ငြာကြည့်ရန်", url=AD_LINK)]])
+            )
             await query.message.delete()
-        except:
-            await query.message.reply_document(document=file_id, caption="ဖိုင် ရပါပြီ။")
-            await query.message.delete()
+            await query.answer("ဖိုင်ကို ပို့ပေးလိုက်ပါပြီ။", show_alert=False)
+        except Exception as e:
+            await query.message.reply_text("❌ အမှားအယွင်းရှိသွားပါသည်။ Link ပြန်ပို့ပေးပါ။")
         return
 
+    # ဒေါင်းလုဒ်လုပ်သည့်အပိုင်း
     url = context.user_data.get('last_url')
     if not url:
-        await query.edit_message_text("❌ Link ပြန်ပို့ပေးပါ။")
+        await query.answer("Link သက်တမ်းကုန်သွားပါပြီ။ ပြန်ပို့ပေးပါ။", show_alert=True)
         return
 
-    await query.edit_message_text("⏳ ခဏစောင့်ပါ။ ပြင်ဆင်နေပါသည်။...")
+    await query.edit_message_text("⏳ ခဏစောင့်ပါ။ ဒေါင်းလုဒ်ဆွဲနေပါသည်...")
 
     try:
-        m_type = 'video' if action == 'dl_video' else 'audio'
+        m_type = 'video' if query.data == 'dl_video' else 'audio'
         ydl_opts = {
             'format': 'best' if m_type == 'video' else 'bestaudio/best',
             'outtmpl': f'dl_{user_id}.%(ext)s',
             'quiet': True,
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             file_path = ydl.prepare_filename(info)
 
+        # Storage Channel သို့ ပို့ခြင်း
         with open(file_path, 'rb') as f:
             if m_type == 'video':
                 sent = await context.bot.send_video(chat_id=STORAGE_CHANNEL_ID, video=f)
-                file_id = sent.video.file_id
             else:
                 sent = await context.bot.send_audio(chat_id=STORAGE_CHANNEL_ID, audio=f)
-                file_id = sent.audio.file_id
+            
+            storage_msg_id = sent.message_id
         
         if os.path.exists(file_path): os.remove(file_path)
 
-        # File ID ကို ခဏသိမ်းထားမယ်
-        context.user_data['temp_id'] = file_id
-        context.user_data['temp_type'] = m_type
-
-        keyboard = [
-            [InlineKeyboardButton("📺 ကြော်ငြာကြည့်ရန် (၅ စက္ကန့်)", web_app=WebAppInfo(url=AD_LINK))],
-            [InlineKeyboardButton("✅ ဖိုင်ရယူရန်", callback_data="get_file")]
-        ]
-        await query.edit_message_text("✅ အဆင်သင့်ဖြစ်ပါပြီ။\n\n၁။ ကြော်ငြာကြည့်ရန် ကိုနှိပ်ပါ။\n၂။ ပြီးနောက် ဖိုင်ရယူရန် ကိုနှိပ်ပါ။", reply_markup=InlineKeyboardMarkup(keyboard))
+        # User ဆီသို့ ခလုတ်တစ်ခုတည်းဖြင့် ပြန်စာပို့ခြင်း
+        keyboard = [[InlineKeyboardButton("🚀 ဖိုင်ရယူရန် (၁-ကလစ်)", callback_data=f"send_{storage_msg_id}")]]
+        await query.edit_message_text(
+            "✅ ဗီဒီယို အဆင်သင့်ဖြစ်ပါပြီ။\n\nအောက်ကခလုတ်ကို နှိပ်ပြီး ရယူလိုက်ပါ။", 
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
     except Exception:
         err = traceback.format_exc()
