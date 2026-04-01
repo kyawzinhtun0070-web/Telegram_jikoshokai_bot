@@ -2,7 +2,7 @@ import os
 import asyncio
 import logging
 import traceback
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import yt_dlp
 
@@ -15,14 +15,14 @@ AD_LINK = 'https://www.profitablecpmratenetwork.com/iea7hf0n?key=3f50007692900d4
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# Force Join စစ်ဆေးခြင်း
+# --- Force Join စစ်ဆေးခြင်း ---
 async def check_joined(user_id, context):
     try:
         member = await context.bot.get_chat_member(chat_id=MAIN_CHANNEL, user_id=user_id)
         return member.status not in ['left', 'kicked']
     except: return True
 
-# Sensei စိတ်ကြိုက် Greeting ပုံစံ (Premium မပါ)
+# --- Sensei အကြိုက်ဆုံး Greeting (Premium မပါ) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         "👋 မင်္ဂလာပါ!\n\n"
@@ -32,7 +32,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(welcome_text)
 
-# Link ပို့လာလျှင်
+# --- Link ပို့လာလျှင် ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     url = update.message.text
@@ -53,19 +53,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                  InlineKeyboardButton("🎵 အသံ (Audio) ယူမယ်", callback_data="dl_audio")]]
     await update.message.reply_text("👇 ဘယ်လိုပုံစံ ဒေါင်းလုဒ်ဆွဲချင်ပါသလဲ ရွေးပေးပါ။", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# ခလုတ်နှိပ်ခြင်း (ကြော်ငြာအရင်ပွင့်ပြီး ဗီဒီယိုတန်းထွက်မည့်အပိုင်း)
+# --- ခလုတ်နှိပ်ခြင်း (Error ကင်းသော စနစ်သစ်) ---
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     
-    # "ဗီဒီယိုရယူရန်" ခလုတ်ကို နှိပ်လိုက်လျှင်
+    # ဖိုင်ထုတ်ပေးသည့် အပိုင်း
     if query.data.startswith("get_"):
         msg_id = query.data.split("_")[1]
-        
-        # ၁။ ကြော်ငြာလင့်ကို တန်းပွင့်ခိုင်းမယ် (Open Link Popup တက်လာမယ်)
-        await query.answer(url=AD_LINK) 
-        
-        # ၂။ တစ်ပြိုင်နက်တည်းမှာပဲ ဗီဒီယိုကို User ဆီ တန်းပို့ပေးမယ်
+        await query.answer("ဗီဒီယိုကို ပို့ပေးနေပါပြီ...")
         try:
             await context.bot.copy_message(
                 chat_id=user_id,
@@ -75,10 +71,10 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await query.message.delete()
         except:
-            await query.message.reply_text("❌ အမှားအယွင်းရှိပါသည်။ Link ကို ပြန်ပို့ပေးပါ။")
+            await query.message.reply_text("❌ စနစ်ချို့ယွင်းချက်ရှိနေပါသည်။ Link ပြန်ပို့ပေးပါ။")
         return
 
-    # ဒေါင်းလုဒ်ဆွဲသည့်အပိုင်း
+    # ဒေါင်းလုဒ်ဆွဲသည့် အပိုင်း
     url = context.user_data.get('last_url')
     if not url: return
 
@@ -92,7 +88,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             info = ydl.extract_info(url, download=True)
             file_path = ydl.prepare_filename(info)
 
-        # Storage Channel သို့ ပို့ခြင်း
+        # Storage ထဲပို့ပြီး ID ယူမယ်
         with open(file_path, 'rb') as f:
             if m_type == 'video': sent = await context.bot.send_video(chat_id=STORAGE_CHANNEL_ID, video=f)
             else: sent = await context.bot.send_audio(chat_id=STORAGE_CHANNEL_ID, audio=f)
@@ -100,14 +96,20 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if os.path.exists(file_path): os.remove(file_path)
 
-        # ခလုတ်တစ်ခုတည်းဖြင့် ပြန်စာပို့ခြင်း
-        # နှိပ်လိုက်တာနဲ့ ကြော်ငြာပွင့်ပြီး ဗီဒီယို တန်းထွက်လာပါမယ်
-        keyboard = [[InlineKeyboardButton("🚀 ဗီဒီယိုရယူရန် (ကြော်ငြာကြည့်ရန်)", callback_data=f"get_{storage_msg_id}")]]
-        await query.edit_message_text("✅ အဆင်သင့်ဖြစ်ပါပြီ။ အောက်ကခလုတ်ကို နှိပ်ပြီး ရယူပါ။", reply_markup=InlineKeyboardMarkup(keyboard))
+        # ✅ ဒီအပိုင်းက Sensei အလိုရှိသော ကြော်ငြာပြီးမှ ဖိုင်ရမည့်စနစ်ပါ
+        # ခလုတ် ၂ ခုကို ဆင့်ထားပါတယ် - အပေါ်ကကြော်ငြာကို နှိပ်မှ အောက်ကခလုတ်ကို မြင်ရမှာပါ
+        keyboard = [
+            [InlineKeyboardButton("📺 (၁) ကြော်ငြာအရင်ကြည့်ရန်", web_app=WebAppInfo(url=AD_LINK))],
+            [InlineKeyboardButton("🚀 (၂) ဗီဒီယိုရယူရန်", callback_data=f"get_{storage_msg_id}")]
+        ]
+        await query.edit_message_text(
+            "✅ ဗီဒီယို အဆင်သင့်ဖြစ်ပါပြီ။\n\n"
+            "၁။ ပထမဆုံး 'ကြော်ငြာကြည့်ရန်' ကိုနှိပ်ပြီး ၅ စက္ကန့်ကြည့်ပါ။\n"
+            "၂။ ပြီးနောက် 'ဗီဒီယိုရယူရန်' ကိုနှိပ်ပြီး သိမ်းယူနိုင်ပါပြီ။", 
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
     except Exception:
-        err = traceback.format_exc()
-        await context.bot.send_message(chat_id=ADMIN_ID, text=f"❌ **Error Detail:**\n`{err[:3000]}`")
         await query.edit_message_text("❌ ဒေါင်းလုဒ်ဆွဲ၍ မရပါ။ Link ပြန်စစ်ပေးပါ။")
 
 if __name__ == '__main__':
