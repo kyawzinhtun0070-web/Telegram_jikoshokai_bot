@@ -8,8 +8,8 @@ import yt_dlp
 
 # --- Config ---
 TOKEN = '8659166008:AAGEI5f61PsG6wd5ciKEazmqtiRiycDTYbI'
-ADMIN_ID = 6131831207 # Integer
-STORAGE_CHANNEL_ID = -1003649365692 # Integer
+ADMIN_ID = 6131831207 
+STORAGE_CHANNEL_ID = -1003649365692
 MAIN_CHANNEL = '@linktovideodownloadermm'
 AD_LINK = 'https://www.profitablecpmratenetwork.com/iea7hf0n?key=3f50007692900d40cca3bb9bc6aee189'
 
@@ -22,14 +22,13 @@ async def check_joined(user_id, context):
         return member.status not in ['left', 'kicked']
     except: return True
 
-# Greeting ပုံစံအဟောင်း
+# Sensei စိတ်ကြိုက် Greeting ပုံစံ (Premium မပါ)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         "👋 မင်္ဂလာပါ!\n\n"
         "ကျွန်တော်က Social Media များမှ ဗီဒီယိုနှင့် အသံ (Audio) များကို "
         "အလွယ်တကူ ဒေါင်းလုဒ်ဆွဲပေးမည့် Bot ပါ။\n\n"
-        "📥 ဒေါင်းလုဒ်ဆွဲလိုသော Video Link ကို ဒီမှာ ပို့ပေးလိုက်ပါ ခင်ဗျာ။\n\n"
-        "👑 ကြော်ငြာမကြည့်လိုပါက Premium ဝယ်ယူနိုင်ပါတယ်။"
+        "📥 ဒေါင်းလုဒ်ဆွဲလိုသော Video Link ကို ဒီမှာ ပို့ပေးလိုက်ပါ ခင်ဗျာ။"
     )
     await update.message.reply_text(welcome_text)
 
@@ -39,7 +38,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
     if not url.startswith("http"): return
 
-    # Admin Noti
+    # Admin Noti (ဘယ်သူသုံးလဲ၊ ဘာလင့်လဲ)
     try: await context.bot.send_message(chat_id=ADMIN_ID, text=f"🔔 User: {user.first_name}\n🆔 ID: {user.id}\n🔗 Link: {url}")
     except: pass
 
@@ -54,7 +53,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                  InlineKeyboardButton("🎵 အသံ (Audio) ယူမယ်", callback_data="dl_audio")]]
     await update.message.reply_text("👇 ဘယ်လိုပုံစံ ဒေါင်းလုဒ်ဆွဲချင်ပါသလဲ ရွေးပေးပါ။", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# ခလုတ်နှိပ်ခြင်း (အဓိက အပိုင်း)
+# ခလုတ်နှိပ်ခြင်း (ကြော်ငြာအရင်ပွင့်ပြီး ဗီဒီယိုတန်းထွက်မည့်အပိုင်း)
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
@@ -63,22 +62,20 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data.startswith("get_"):
         msg_id = query.data.split("_")[1]
         
-        # ၁။ "ပို့ပေးနေပြီ" လို့ Toast message ပြမယ်
-        await query.answer("ဗီဒီယိုကို ပို့ပေးနေပါပြီ... ခဏစောင့်ပါ။", show_alert=False)
+        # ၁။ ကြော်ငြာလင့်ကို တန်းပွင့်ခိုင်းမယ် (Open Link Popup တက်လာမယ်)
+        await query.answer(url=AD_LINK) 
         
-        # ၂။ ဗီဒီယိုကို User ဆီ တိုက်ရိုက် Copy ကူးပို့ပေးမယ်
+        # ၂။ တစ်ပြိုင်နက်တည်းမှာပဲ ဗီဒီယိုကို User ဆီ တန်းပို့ပေးမယ်
         try:
             await context.bot.copy_message(
                 chat_id=user_id,
                 from_chat_id=STORAGE_CHANNEL_ID,
                 message_id=int(msg_id),
-                caption="✅ ဒေါင်းလုဒ် ရပါပြီ။\n\n🙏 Bot အတွက် အောက်ကကြော်ငြာကို ၅ စက္ကန့်ကြည့်ပေးပါဦး။",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📺 ကြော်ငြာကြည့်ရန်", url=AD_LINK)]])
+                caption="✅ ဒေါင်းလုဒ် ရပါပြီ။ ကျေးဇူးတင်ပါသည်။"
             )
             await query.message.delete()
-        except Exception as e:
-            logging.error(f"Error: {e}")
-            await query.message.reply_text("❌ ဖိုင်ထုတ်မရပါ။ Bot ကို Storage Channel တွင် Admin ခန့်ထားပါ သို့မဟုတ် Link ပြန်ပို့ပေးပါ။")
+        except:
+            await query.message.reply_text("❌ အမှားအယွင်းရှိပါသည်။ Link ကို ပြန်ပို့ပေးပါ။")
         return
 
     # ဒေါင်းလုဒ်ဆွဲသည့်အပိုင်း
@@ -91,7 +88,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         m_type = 'video' if query.data == 'dl_video' else 'audio'
         ydl_opts = {'format': 'best', 'outtmpl': f'dl_{user_id}.%(ext)s', 'quiet': True}
         
-        # ဒေါင်းလုဒ်ဆွဲခြင်း
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             file_path = ydl.prepare_filename(info)
@@ -105,7 +101,8 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(file_path): os.remove(file_path)
 
         # ခလုတ်တစ်ခုတည်းဖြင့် ပြန်စာပို့ခြင်း
-        keyboard = [[InlineKeyboardButton("🚀 ဗီဒီယိုရယူရန်", callback_data=f"get_{storage_msg_id}")]]
+        # နှိပ်လိုက်တာနဲ့ ကြော်ငြာပွင့်ပြီး ဗီဒီယို တန်းထွက်လာပါမယ်
+        keyboard = [[InlineKeyboardButton("🚀 ဗီဒီယိုရယူရန် (ကြော်ငြာကြည့်ရန်)", callback_data=f"get_{storage_msg_id}")]]
         await query.edit_message_text("✅ အဆင်သင့်ဖြစ်ပါပြီ။ အောက်ကခလုတ်ကို နှိပ်ပြီး ရယူပါ။", reply_markup=InlineKeyboardMarkup(keyboard))
 
     except Exception:
