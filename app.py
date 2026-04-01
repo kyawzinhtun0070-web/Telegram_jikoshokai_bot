@@ -20,11 +20,19 @@ async def check_joined(user_id, context):
     try:
         member = await context.bot.get_chat_member(chat_id=MAIN_CHANNEL, user_id=user_id)
         return member.status in ['member', 'administrator', 'creator']
-    except:
-        return False
+    except: return False
 
-# --- Greeting ပုံစံအဟောင်း (Premium မပါ) ---
+# --- Greeting & Force Join Check ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if not await check_joined(user_id, context):
+        keyboard = [[InlineKeyboardButton("📢 Channel Join ရန်", url=f"https://t.me/linktovideodownloadermm")]]
+        await update.message.reply_text(
+            "👋 မင်္ဂလာပါ! ကျွန်တော်တို့ Bot ကို အသုံးပြုရန် Channel ကို အရင် Join ပေးပါ။", 
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+
     welcome_text = (
         "👋 မင်္ဂလာပါ!\n\n"
         "ကျွန်တော်က Social Media များမှ ဗီဒီယိုနှင့် အသံ (Audio) များကို "
@@ -39,14 +47,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
     if not url.startswith("http"): return
 
-    # 🛑 (၁) FORCE JOIN CHECK
+    # Force Join Check
     if not await check_joined(user.id, context):
-        keyboard = [[InlineKeyboardButton("📢 Channel Join ရန်", url="https://t.me/linktovideodownloadermm")]]
-        await update.message.reply_text(
-            "⚠️ ဗီဒီယိုဒေါင်းရန် ကျွန်တော်တို့၏ Channel ကို အရင် Join ပေးပါ။\n\n"
-            "Join ပြီးပါက Link ကို တစ်ခေါက်ပြန်ပို့ပေးပါခင်ဗျာ။", 
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        keyboard = [[InlineKeyboardButton("📢 Channel Join ရန်", url=f"https://t.me/linktovideodownloadermm")]]
+        await update.message.reply_text("⚠️ ဗီဒီယိုဒေါင်းရန် Channel ကို အရင် Join ပေးပါ။", reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
     # Admin Noti
@@ -63,22 +67,22 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     
-    # 🛑 (၂) ကြော်ငြာတံခါးဖွင့်သည့်အဆင့် (Unlock Step)
-    if query.data.startswith("unlock_"):
+    # ၁။ "ကြော်ငြာကြည့်ပြီးပြီ" ဟု နှိပ်လိုက်လျှင် (Timer စနစ်)
+    if query.data.startswith("verify_"):
         _, m_type, msg_id = query.data.split("_")
         label = "ဗီဒီယို" if m_type == "video" else "အသံဖိုင်"
         
-        await query.answer("ခလုတ်ဖွင့်ပေးလိုက်ပါပြီ။")
+        await query.edit_message_text(f"⏳ {label}လင့်ကို စစ်ဆေးနေပါသည်... (၅ စက္ကန့်စောင့်ပါ)")
+        await asyncio.sleep(5) # ၅ စက္ကန့် အတင်းစောင့်ခိုင်းခြင်း
         
-        # ကြော်ငြာနှိပ်ပြီးမှ ဒေါင်းလုဒ်ခလုတ်ကို Edit Message နဲ့ အသစ်ပြောင်းလဲပြသခြင်း
         new_keyboard = [[InlineKeyboardButton(f"🚀 {label}ရယူရန် (Download)", callback_data=f"get_{m_type}_{msg_id}")]]
         await query.edit_message_text(
-            f"✅ ကြော်ငြာကြည့်ပေးသည့်အတွက် ကျေးဇူးတင်ပါသည်။\nယခု အောက်ကခလုတ်ကို နှိပ်ပြီး {label}ကို ရယူနိုင်ပါပြီ။",
+            f"✅ ကြော်ငြာကြည့်ရှုမှု အောင်မြင်ပါသည်။\nယခု အောက်ကခလုတ်ကို နှိပ်ပြီး {label}ကို ရယူပါ။",
             reply_markup=InlineKeyboardMarkup(new_keyboard)
         )
         return
 
-    # 🛑 (၃) ဖိုင်အစစ်အမှန် ပို့ပေးသည့်အဆင့် (Final Step)
+    # ၂။ ဖိုင်အစစ်အမှန် ပို့ပေးသည့်အဆင့်
     if query.data.startswith("get_"):
         _, m_type, msg_id = query.data.split("_")
         label = "ဗီဒီယို" if m_type == "video" else "အသံဖိုင်"
@@ -96,7 +100,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("❌ စနစ်ချို့ယွင်းချက်ရှိပါသည်။ Link ပြန်ပို့ပေးပါ။")
         return
 
-    # 🛑 (၄) ဒေါင်းလုဒ်ဆွဲသည့် အပိုင်း
+    # ၃။ ဒေါင်းလုဒ်ဆွဲသည့် အပိုင်း
     url = context.user_data.get('last_url')
     if not url: return
 
@@ -125,14 +129,14 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if os.path.exists(file_path): os.remove(file_path)
 
-        # ✅ ဒီနေရာမှာ ဗီဒီယိုခလုတ်ကို လုံးဝဝှက်ထားပြီး "ကြော်ငြာ" ခလုတ်ကိုပဲ အရင်ပြမယ်
+        # ✅ တကယ့် Ad-Gate: ကြော်ငြာအရင်နှိပ်ခိုင်းပြီး 'Verify' လုပ်ခိုင်းမယ်
         keyboard = [
-            [InlineKeyboardButton(f"📺 (၁) ကြော်ငြာကြည့်ပြီး {label}ယူရန်", url=AD_LINK)],
-            [InlineKeyboardButton(f"🔓 (၂) ခလုတ်ဖွင့်ရန် (ကြော်ငြာနှိပ်ပြီးမှနှိပ်ပါ)", callback_data=f"unlock_{m_type}_{storage_msg_id}")]
+            [InlineKeyboardButton(f"📺 (၁) ကြော်ငြာကြည့်ရန်", url=AD_LINK)],
+            [InlineKeyboardButton(f"✅ (၂) ကြည့်ပြီးပါပြီ (ခလုတ်ဖွင့်ရန်)", callback_data=f"verify_{m_type}_{storage_msg_id}")]
         ]
         
         await query.edit_message_text(
-            f"✅ {label} အဆင်သင့်ဖြစ်ပါပြီ။\n\n၁။ အပေါ်က 'ကြော်ငြာကြည့်ရန်' ကို အရင်နှိပ်ပါ။\n၂။ ပြီးမှ 'ခလုတ်ဖွင့်ရန်' ကို နှိပ်ပါ။", 
+            f"✅ {label} အဆင်သင့်ဖြစ်ပါပြီ။\n\n၁။ 'ကြော်ငြာကြည့်ရန်' ကို နှိပ်ပါ။\n၂။ ကြည့်ပြီးပါက 'ကြည့်ပြီးပါပြီ' ခလုတ်ကို နှိပ်ပါ။", 
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
