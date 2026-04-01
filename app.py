@@ -14,24 +14,26 @@ AD_LINK = 'https://www.profitablecpmratenetwork.com/iea7hf0n?key=3f50007692900d4
 
 logging.basicConfig(level=logging.INFO)
 
-# --- Force Join စစ်ဆေးခြင်း ---
+# --- Force Join စစ်ဆေးခြင်း (Strict Check) ---
 async def check_joined(user_id, context):
     try:
-        # Bot ကို Channel မှာ Admin ခန့်ထားမှ ဒါက အလုပ်လုပ်မှာပါ
         member = await context.bot.get_chat_member(chat_id=MAIN_CHANNEL, user_id=user_id)
         return member.status in ['member', 'administrator', 'creator']
     except: return False
 
-# --- Greeting & Force Join ---
+# --- Greeting (Force Join ပါပြီးသား) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if not await check_joined(user_id, context):
-        keyboard = [[InlineKeyboardButton("📢 Channel Join ရန်", url="https://t.me/linktovideodownloadermm")]]
-        await update.message.reply_text(
-            "👋 မင်္ဂလာပါ! ကျွန်တော်တို့ Bot ကို အသုံးပြုရန် Channel ကို အရင် Join ပေးပါ။\n\n"
-            "Join ပြီးပါက /start ကို ပြန်နှိပ်ပါခင်ဗျာ။", 
-            reply_markup=InlineKeyboardMarkup(keyboard)
+    is_joined = await check_joined(user_id, context)
+    
+    if not is_joined:
+        text = (
+            "👋 မင်္ဂလာပါ!\n\n"
+            "ကျွန်တော်တို့ Bot ကို အသုံးပြုရန် အောက်က Channel ကို အရင် Join ပေးပါ။\n"
+            "Join ပြီးပါက /start ကို ပြန်နှိပ်ပါခင်ဗျာ။"
         )
+        keyboard = [[InlineKeyboardButton("📢 Channel Join ရန်", url="https://t.me/linktovideodownloadermm")]]
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
     welcome_text = (
@@ -42,7 +44,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(welcome_text)
 
-# --- Link ပို့လာလျှင် ---
+# --- Link ပို့လာလျှင် (Force Join ထပ်စစ်သည်) ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not await check_joined(user.id, context):
@@ -62,27 +64,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                  InlineKeyboardButton("🎵 အသံ (Audio) ယူမယ်", callback_data="dl_audio")]]
     await update.message.reply_text("👇 ဘယ်လိုပုံစံ ဒေါင်းလုဒ်ဆွဲချင်ပါသလဲ ရွေးပေးပါ။", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# --- ခလုတ်နှိပ်ခြင်း (Sensei အလိုရှိသော Strict Ad-Gate) ---
+# --- ခလုတ်နှိပ်ခြင်း (Force Ad စနစ် - Bypass လုံးဝမရ) ---
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     
-    if query.data.startswith("force_"):
+    # 🛑 Sensei အလိုရှိသော "ကြော်ငြာကိုပဲ အရင်ကြည့်ခိုင်းမည့်စနစ်"
+    if query.data.startswith("force_ad_"):
         _, m_type, msg_id = query.data.split("_")
         label = "ဗီဒီယို" if m_type == "video" else "အသံဖိုင်"
         
-        # ၁။ User ဆီကို ကြော်ငြာလင့် အရင်ပို့မယ်
+        # ၁။ User ဆီကို ကြော်ငြာလင့် အရင်ပြမယ်
         await query.edit_message_text(
             f"📥 {label}ကို ထုတ်ပေးနေပါပြီ...\n\n"
-            f"⚠️ **အရေးကြီးသည်:** ဖိုင်မပို့မီ အောက်ကကြော်ငြာလင့်ကို အရင်နှိပ်ပေးပါ။\n\n"
+            f"⚠️ **အဆင့် (၁):** အောက်ကကြော်ငြာလင့်ကို နှိပ်ပါ။\n"
             f"🔗 {AD_LINK}\n\n"
-            f"⏳ ၅ စက္ကန့်အတွင်း {label} ရောက်လာပါလိမ့်မည်။"
+            f"⏳ ကြည့်ပြီး ၇ စက္ကန့်အတွင်း {label} အလိုအလျောက် ရောက်လာပါလိမ့်မည်။"
         )
         
-        # ၂။ ၅ စက္ကန့် အတင်းစောင့်ခိုင်းမယ် (Bypass လုပ်မရအောင်)
-        await asyncio.sleep(6)
+        # ၂။ ၇ စက္ကန့် အတင်းစောင့်ခိုင်းမယ် (Bypass လုပ်မရအောင် Timer အသေပိတ်ထားသည်)
+        await asyncio.sleep(7)
         
-        # ၃။ ဖိုင်ကို အလိုအလျောက် ပို့ပေးမယ်
+        # ၃။ ဖိုင်ကို Storage ထဲကနေ ဆွဲထုတ်ပြီး အလိုအလျောက် ပို့ပေးမယ်
         try:
             await context.bot.copy_message(
                 chat_id=user_id,
@@ -91,10 +94,11 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption=f"✅ {label} ရပါပြီ။ ကျေးဇူးတင်ပါသည်။"
             )
             await query.message.delete()
-        except:
+        except Exception:
             await query.message.reply_text("❌ စနစ်ချို့ယွင်းချက်ရှိပါသည်။ Link ပြန်ပို့ပေးပါ။")
         return
 
+    # ဒေါင်းလုဒ်လုပ်သည့် အပိုင်း
     url = context.user_data.get('last_url')
     if not url: return
 
@@ -120,10 +124,10 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if os.path.exists(file_path): os.remove(file_path)
 
-        # ✅ ခလုတ်တစ်ခုတည်းပဲ ပြမယ် (ဒေါင်းလုဒ်ခလုတ် လုံးဝမပါ)
-        keyboard = [[InlineKeyboardButton(f"🚀 ကြော်ငြာကြည့်ပြီး {label}ရယူရန်", callback_data=f"force_{m_type}_{storage_msg_id}")]]
+        # ✅ ဒေါင်းလုဒ်ခလုတ် လုံးဝမပါပါ (ကြော်ငြာကြည့်ရန် ခလုတ်တစ်ခုတည်းသာ)
+        keyboard = [[InlineKeyboardButton(f"🚀 ကြော်ငြာကြည့်ပြီး {label}ရယူရန်", callback_data=f"force_ad_{m_type}_{storage_msg_id}")]]
         await status.edit_text(
-            f"✅ {label} ဒေါင်းလုဒ်ဆွဲပြီးပါပြီ။\nအောက်ကခလုတ်ကို နှိပ်ပြီး ကြော်ငြာကြည့်ကာ ဖိုင်ရယူပါ။", 
+            f"✅ {label} အဆင်သင့်ဖြစ်ပါပြီ။\nအောက်ကခလုတ်ကို နှိပ်ပြီး ကြော်ငြာကြည့်ကာ {label}ကို ရယူပါ။", 
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
