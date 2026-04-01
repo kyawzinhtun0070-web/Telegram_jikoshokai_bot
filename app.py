@@ -24,24 +24,22 @@ async def check_joined(user_id, context):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         "👋 မင်္ဂလာပါ!\n\n"
-        "ကျွန်တော်က Social Media များမှ ဗီဒီယိုနှင့် အသံ (Audio) များကို "
-        "ဒေါင်းလုဒ်ဆွဲပေးမည့် Bot ပါ။\n\n"
-        "📥 Link ပို့ပေးလိုက်ပါ ခင်ဗျာ။\n\n"
-        "👑 Premium (တစ်လ ၅၀၀၀ ကျပ်): @kyawzinhtun0070"
+        "Social Media များမှ ဗီဒီယိုနှင့် အသံများကို ဒေါင်းလုဒ်ဆွဲပေးမည့် Bot ပါ။\n"
+        "📥 ဒေါင်းလုဒ်ဆွဲလိုသော Link ကို ပို့ပေးလိုက်ပါ ခင်ဗျာ။"
     )
-    keyboard = [[InlineKeyboardButton("👑 Premium ဝယ်ယူရန်", url="https://t.me/kyawzinhtun0070")]]
-    await update.message.reply_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text(welcome_text)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     url = update.message.text
     if not url.startswith("http"): return
 
-    # Admin Noti
+    # Admin Noti (ဘယ်သူသုံးနေလဲ သိရအောင်)
     admin_msg = f"🔔 **User Activity**\n👤 အမည်: {user.first_name}\n🆔 ID: `{user.id}`\n🔗 Link: {url}"
     try: await context.bot.send_message(chat_id=ADMIN_ID, text=admin_msg, parse_mode="Markdown")
     except: pass
 
+    # Force Join စစ်ဆေးခြင်း
     if not await check_joined(user.id, context):
         keyboard = [[InlineKeyboardButton("📢 Channel Join ရန်", url=f"https://t.me/{MAIN_CHANNEL[1:]}")]]
         await update.message.reply_text("ဗီဒီယိုဒေါင်းရန် ကျွန်တော်တို့၏ Channel ကို အရင် Join ပေးပါ။", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -58,13 +56,13 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action = query.data
     user_id = query.from_user.id
 
-    # ဖိုင်ထုတ်ပေးသည့် အပိုင်း
-    if action == "get_stored_file":
-        file_id = context.user_data.get('temp_file_id')
-        media_type = context.user_data.get('temp_media_type')
+    # ဖိုင်ပြန်ထုတ်ပေးသည့်အပိုင်း
+    if action == "get_file":
+        file_id = context.user_data.get('temp_id')
+        media_type = context.user_data.get('temp_type')
         
         if not file_id:
-            await query.message.reply_text("❌ စိတ်မရှိပါနဲ့။ ဖိုင်သက်တမ်းကုန်သွားပါပြီ။ Link ပြန်ပို့ပေးပါ။")
+            await query.message.reply_text("❌ စနစ်ကြောင့် ဖိုင်မှတ်ဉာဏ် ပျောက်သွားပါသည်။ Link ကို ပြန်ပို့ပေးပါ။")
             return
 
         try:
@@ -78,18 +76,17 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     url = context.user_data.get('last_url')
     if not url:
-        await query.edit_message_text("❌ အချိန်ကြာသွားသဖြင့် Link ကို ပြန်ပို့ပေးပါ။")
+        await query.edit_message_text("❌ Link ပြန်ပို့ပေးပါ။")
         return
 
     await query.edit_message_text("⏳ ခဏစောင့်ပါ။ ပြင်ဆင်နေပါသည်။...")
 
     try:
-        media_type = 'video' if action == 'dl_video' else 'audio'
+        m_type = 'video' if action == 'dl_video' else 'audio'
         ydl_opts = {
-            'format': 'best' if media_type == 'video' else 'bestaudio/best',
+            'format': 'best' if m_type == 'video' else 'bestaudio/best',
             'outtmpl': f'dl_{user_id}.%(ext)s',
             'quiet': True,
-            'no_warnings': True,
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         }
         
@@ -98,7 +95,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             file_path = ydl.prepare_filename(info)
 
         with open(file_path, 'rb') as f:
-            if media_type == 'video':
+            if m_type == 'video':
                 sent = await context.bot.send_video(chat_id=STORAGE_CHANNEL_ID, video=f)
                 file_id = sent.video.file_id
             else:
@@ -107,13 +104,13 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if os.path.exists(file_path): os.remove(file_path)
 
-        # File ID ကို ခဏသိမ်းထားမယ် (Button Limit ကျော်မှာ စိုးလို့)
-        context.user_data['temp_file_id'] = file_id
-        context.user_data['temp_media_type'] = media_type
+        # File ID ကို ခဏသိမ်းထားမယ်
+        context.user_data['temp_id'] = file_id
+        context.user_data['temp_type'] = m_type
 
         keyboard = [
             [InlineKeyboardButton("📺 ကြော်ငြာကြည့်ရန် (၅ စက္ကန့်)", web_app=WebAppInfo(url=AD_LINK))],
-            [InlineKeyboardButton("✅ ဖိုင်ရယူရန်", callback_data="get_stored_file")]
+            [InlineKeyboardButton("✅ ဖိုင်ရယူရန်", callback_data="get_file")]
         ]
         await query.edit_message_text("✅ အဆင်သင့်ဖြစ်ပါပြီ။\n\n၁။ ကြော်ငြာကြည့်ရန် ကိုနှိပ်ပါ။\n၂။ ပြီးနောက် ဖိုင်ရယူရန် ကိုနှိပ်ပါ။", reply_markup=InlineKeyboardMarkup(keyboard))
 
