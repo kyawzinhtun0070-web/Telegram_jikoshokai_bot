@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import yt_dlp
@@ -7,38 +8,47 @@ import yt_dlp
 # --- Config ---
 TOKEN = '8659166008:AAGEI5f61PsG6wd5ciKEazmqtiRiycDTYbI'
 ADMIN_ID = 6131831207 
-STORAGE_CHANNEL_ID = -1003649365692 
-MAIN_CHANNEL = '@linktovideodownloadermm'
+STORAGE_CHANNEL_ID = -1003649365692 # ဗီဒီယိုတွေ သိမ်းမယ့်နေရာ
+FORCE_JOIN_CHANNEL = -1003894700479 # မင်းပေးတဲ့ Channel ID အသစ်
 
 logging.basicConfig(level=logging.INFO)
 
-# --- Channel Join ထားခြင်း ရှိ/မရှိ စစ်ဆေးခြင်း ---
+# --- Force Join စစ်ဆေးခြင်း ---
 async def check_joined(user_id, context):
     try:
-        member = await context.bot.get_chat_member(chat_id=MAIN_CHANNEL, user_id=user_id)
-        # Status က member, administrator သို့မဟုတ် creator ဖြစ်ရမယ်
+        member = await context.bot.get_chat_member(chat_id=FORCE_JOIN_CHANNEL, user_id=user_id)
         return member.status in ['member', 'administrator', 'creator']
-    except Exception as e:
-        logging.error(f"Force Join Check Error: {e}")
+    except Exception:
         return False
 
-# --- /start Command ---
+# --- Greeting (Professional Look) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
+    user = update.effective_user
+    is_joined = await check_joined(user.id, context)
     
-    if not await check_joined(user_id, context):
+    if not is_joined:
+        # Channel Link ကို Username မသိရင် ID ကနေ တိုက်ရိုက်သွားလို့မရလို့ Private Link သုံးပါ သို့မဟုတ် Username သိရင် ပြန်ပြင်ပါ
         text = (
-            "👋 မင်္ဂလာပါ!\n\n"
-            "ကျွန်တော်တို့ Bot ကို အသုံးပြုရန် အောက်က Channel ကို အရင် Join ပေးပါ။\n"
-            "Join ပြီးပါက /start ကို ပြန်နှိပ်ပါ ခင်ဗျာ။"
+            f"👋 မင်္ဂလာပါ {user.first_name}!\n\n"
+            "ကျွန်တော်တို့ရဲ့ Bot ကို အသုံးပြုဖို့ အောက်က Channel ကို အရင် Join ပေးပါဦး။\n"
+            "Join ပြီးမှ /start ကို ပြန်နှိပ်ပေးပါ ခင်ဗျာ။"
         )
-        keyboard = [[InlineKeyboardButton("📢 Channel Join ရန်", url=f"https://t.me/{MAIN_CHANNEL.replace('@','')}")]]
+        # အောက်က URL မှာ မင်း Channel ရဲ့ username ကို ထည့်ပေးပါ (ဥပမာ t.me/yourchannel)
+        keyboard = [[InlineKeyboardButton("📢 Channel ကို Join ရန်", url="https://t.me/linktovideodownloadermm")]]
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
-    await update.message.reply_text("📥 ဒေါင်းလုဒ်ဆွဲလိုသော Video Link ကို ဒီမှာ ပို့ပေးလိုက်ပါ ခင်ဗျာ။")
+    welcome_text = (
+        "🌟 **Social Media Video Downloader Bot** 🌟\n\n"
+        "ကျွန်တော်က အောက်ပါ Platform တွေကနေ ဗီဒီယိုတွေကို အခမဲ့ ဒေါင်းလုဒ်ဆွဲပေးနိုင်ပါတယ်။\n"
+        "✅ TikTok  ✅ Facebook\n"
+        "✅ YouTube ✅ Instagram\n"
+        "✅ X (Twitter)\n\n"
+        "📥 ဒေါင်းလုဒ်ဆွဲဖို့ ဗီဒီယိုလင့်ခ် (Link) ကို ဒီမှာ ပို့ပေးလိုက်ပါ!"
+    )
+    await update.message.reply_text(welcome_text, parse_mode='Markdown')
 
-# --- Link လက်ခံရရှိခြင်း ---
+# --- Message Handler ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     url = update.message.text
@@ -46,69 +56,78 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not url.startswith("http"):
         return
 
-    # Force Join ထပ်စစ်မယ် (လုံခြုံရေးအတွက်)
+    # Force Join စစ်မယ်
     if not await check_joined(user_id, context):
-        keyboard = [[InlineKeyboardButton("📢 Channel Join ရန်", url=f"https://t.me/{MAIN_CHANNEL.replace('@','')}")]]
-        await update.message.reply_text("⚠️ အရင် Join ပေးပါဦးခင်ဗျာ။", reply_markup=InlineKeyboardMarkup(keyboard))
+        await start(update, context)
         return
 
+    # Link ကို user_data ထဲမှာ အသေအချာ သိမ်းမယ်
     context.user_data['last_url'] = url
+    
     keyboard = [[
         InlineKeyboardButton("📹 ဗီဒီယို ယူမယ်", callback_data="dl_video"),
         InlineKeyboardButton("🎵 အသံ (Audio) ယူမယ်", callback_data="dl_audio")
     ]]
     await update.message.reply_text("👇 ဘယ်လိုပုံစံ ဒေါင်းလုဒ်ဆွဲချင်ပါသလဲ?", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# --- ဒေါင်းလုဒ်လုပ်ပြီး တိုက်ရိုက်ပို့ပေးခြင်း ---
+# --- Button Click Handler (Fixes: "လင့်ပြန်ပို့ပေးပါ" error) ---
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     user_id = query.from_user.id
+    # URL ရှိမရှိ သေချာစစ်မယ်
     url = context.user_data.get('last_url')
     
     if not url:
-        await query.edit_message_text("❌ Link ပြန်ပို့ပေးပါ။")
+        await query.message.reply_text("❌ စနစ်ချို့ယွင်းမှုကြောင့် လင့်ခ် ပျောက်သွားပါတယ်။ ကျေးဇူးပြုပြီး လင့်ခ်ကို ပြန်ပို့ပေးပါ။")
         return
 
-    status_msg = await query.edit_message_text("⏳ ဒေါင်းလုဒ်ဆွဲနေပါပြီ။ ခဏစောင့်ပါ။...")
+    status_msg = await query.edit_message_text("⏳ ဒေါင်းလုဒ်ဆွဲနေပါပြီ။ ခဏစောင့်ပေးပါ။...")
 
     try:
         m_type = 'video' if query.data == 'dl_video' else 'audio'
+        # ဖိုင်နာမည်ကို User ID နဲ့ ခွဲထားမယ် (တခြား user နဲ့ မရောအောင်)
         file_path = f'dl_{user_id}_{m_type}.mp4'
         
+        # Multi-platform Support ဖြစ်ဖို့ Option အစုံထည့်ထားတယ်
         ydl_opts = {
-            'format': 'best' if m_type == 'video' else 'bestaudio/best',
+            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best' if m_type == 'video' else 'bestaudio/best',
             'outtmpl': file_path,
             'quiet': True,
-            'nocheckcertificate': True
+            'no_warnings': True,
+            'nocheckcertificate': True,
+            'ignoreerrors': True
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
-        # ဖိုင်ကို Storage ထဲအရင်ပို့ပြီး User ဆီ Copy ပြန်ကူးပေးမယ် (ဒါမှ Bot ပိုမြန်မယ်)
+        if not os.path.exists(file_path):
+            await query.edit_message_text("❌ ဒေါင်းလုဒ်ဆွဲလို့ မရပါ။ Link မှားနေတာ ဒါမှမဟုတ် ဗီဒီယိုက Private ဖြစ်နေတာ ဖြစ်နိုင်ပါတယ်။")
+            return
+
+        # ဖိုင်ပို့မယ်
         with open(file_path, 'rb') as f:
             if m_type == 'video':
-                sent = await context.bot.send_video(chat_id=STORAGE_CHANNEL_ID, video=f)
+                sent = await context.bot.send_video(chat_id=STORAGE_CHANNEL_ID, video=f, caption="✅ Success")
             else:
-                sent = await context.bot.send_audio(chat_id=STORAGE_CHANNEL_ID, audio=f)
+                sent = await context.bot.send_audio(chat_id=STORAGE_CHANNEL_ID, audio=f, caption="✅ Success")
             
-            # User ဆီကို တိုက်ရိုက် Copy ပို့မယ်
+            # User ဆီ Copy ပို့မယ်
             await context.bot.copy_message(
                 chat_id=user_id,
                 from_chat_id=STORAGE_CHANNEL_ID,
-                message_id=sent.message_id,
-                caption="✅ ဒေါင်းလုဒ်လုပ်ပြီးပါပြီ။"
+                message_id=sent.message_id
             )
 
-        # ပြီးရင် ဖုန်း/Server ထဲက ဖိုင်ဖျက်မယ်
+        # Cleanup
         if os.path.exists(file_path): os.remove(file_path)
         await status_msg.delete()
 
     except Exception as e:
         logging.error(f"Error: {e}")
-        await query.edit_message_text("❌ ဒေါင်းလုဒ်ဆွဲလို့ မရပါ။ Link ပြန်စစ်ပါ။")
+        await query.edit_message_text(f"❌ အခက်အခဲတစ်ခုရှိနေပါတယ်။ နောက်မှ ပြန်စမ်းကြည့်ပါ။")
 
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
@@ -117,5 +136,5 @@ if __name__ == '__main__':
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     app.add_handler(CallbackQueryHandler(button_click))
     
-    print("Bot is running without Ads...")
+    print("Bot is starting with Multi-platform support...")
     app.run_polling()
