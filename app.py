@@ -1,140 +1,124 @@
-import os
-import logging
-import asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
-import yt_dlp
+import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
 
-# --- Config ---
-TOKEN = '8659166008:AAGEI5f61PsG6wd5ciKEazmqtiRiycDTYbI'
-ADMIN_ID = 6131831207 
-STORAGE_CHANNEL_ID = -1003649365692 # ဗီဒီယိုတွေ သိမ်းမယ့်နေရာ
-FORCE_JOIN_CHANNEL = -1003894700479 # မင်းပေးတဲ့ Channel ID အသစ်
+TOKEN = '8651910143:AAFd0mv_MWn_wjnvx6H0brIXXHEtZJ_zvEc'
+CHANNEL_USERNAME = '@yayzatofficial'
+bot = telebot.TeleBot(TOKEN)
 
-logging.basicConfig(level=logging.INFO)
+users_db = {} 
+user_registration = {}
 
-# --- Force Join စစ်ဆေးခြင်း ---
-async def check_joined(user_id, context):
+def check_channel(user_id):
     try:
-        member = await context.bot.get_chat_member(chat_id=FORCE_JOIN_CHANNEL, user_id=user_id)
-        return member.status in ['member', 'administrator', 'creator']
-    except Exception:
+        member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
+        return member.status in ['member', 'creator', 'administrator']
+    except:
         return False
 
-# --- Greeting (Professional Look) ---
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    is_joined = await check_joined(user.id, context)
-    
-    if not is_joined:
-        # Channel Link ကို Username မသိရင် ID ကနေ တိုက်ရိုက်သွားလို့မရလို့ Private Link သုံးပါ သို့မဟုတ် Username သိရင် ပြန်ပြင်ပါ
-        text = (
-            f"👋 မင်္ဂလာပါ {user.first_name}!\n\n"
-            "ကျွန်တော်တို့ရဲ့ Bot ကို အသုံးပြုဖို့ အောက်က Channel ကို အရင် Join ပေးပါဦး။\n"
-            "Join ပြီးမှ /start ကို ပြန်နှိပ်ပေးပါ ခင်ဗျာ။"
-        )
-        # အောက်က URL မှာ မင်း Channel ရဲ့ username ကို ထည့်ပေးပါ (ဥပမာ t.me/yourchannel)
-        keyboard = [[InlineKeyboardButton("📢 Channel ကို Join ရန်", url="https://t.me/linktovideodownloadermm")]]
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+@bot.message_handler(commands=['start'])
+def start_bot(message):
+    user_id = message.chat.id
+    bot.send_message(user_id, "🌟 Yay Zat Zodiac မှ ကြိုဆိုပါတယ်။ သင့်ရဲ့ နာမည်ကို ရိုက်ထည့်ပါ-")
+    bot.register_next_step_handler(message, process_name)
+
+def process_name(message):
+    user_id = message.chat.id
+    user_registration[user_id] = {'name': message.text}
+    bot.send_message(user_id, "အသက် ဘယ်လောက်လဲဗျ?")
+    bot.register_next_step_handler(message, process_age)
+
+def process_age(message):
+    user_id = message.chat.id
+    user_registration[user_id]['age'] = message.text
+    markup = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+    zodiacs = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces']
+    for z in zodiacs: markup.add(z)
+    msg = bot.send_message(user_id, "သင့်ရဲ့ ရာသီခွင်ကို ရွေးချယ်ပါ-", reply_markup=markup)
+    bot.register_next_step_handler(msg, process_zodiac)
+
+def process_zodiac(message):
+    user_id = message.chat.id
+    user_registration[user_id]['zodiac'] = message.text
+    bot.send_message(user_id, "နေထိုင်တဲ့ မြို့ကို ရိုက်ထည့်ပါ-", reply_markup=telebot.types.ReplyKeyboardRemove())
+    bot.register_next_step_handler(message, process_city)
+
+def process_city(message):
+    user_id = message.chat.id
+    user_registration[user_id]['city'] = message.text
+    bot.send_message(user_id, "ဝါသနာ ဘာပါလဲ?")
+    bot.register_next_step_handler(message, process_hobby)
+
+def process_hobby(message):
+    user_id = message.chat.id
+    user_registration[user_id]['hobby'] = message.text
+    bot.send_message(user_id, "အလုပ်အကိုင် ဘာလုပ်ပါသလဲ?")
+    bot.register_next_step_handler(message, process_job)
+
+def process_job(message):
+    user_id = message.chat.id
+    user_registration[user_id]['job'] = message.text
+    markup = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+    markup.add('Male', 'Female')
+    msg = bot.send_message(user_id, "သင့်လိင်အမျိုးအစားကို ရွေးပါ-", reply_markup=markup)
+    bot.register_next_step_handler(msg, process_gender)
+
+def process_gender(message):
+    user_id = message.chat.id
+    user_registration[user_id]['gender'] = message.text
+    markup = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+    markup.add('Male', 'Female', 'Both')
+    msg = bot.send_message(user_id, "သင်ရှာဖွေနေတဲ့ လိင်အမျိုးအစားကို ရွေးပါ-", reply_markup=markup)
+    bot.register_next_step_handler(msg, process_looking_gender)
+
+def process_looking_gender(message):
+    user_id = message.chat.id
+    user_registration[user_id]['looking_gender'] = message.text
+    markup = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+    zodiacs = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces', 'Any']
+    for z in zodiacs: markup.add(z)
+    msg = bot.send_message(user_id, "သင်ရှာဖွေနေတဲ့ ရာသီခွင်ကို ရွေးပါ-", reply_markup=markup)
+    bot.register_next_step_handler(msg, process_looking_zodiac)
+
+def process_looking_zodiac(message):
+    user_id = message.chat.id
+    user_registration[user_id]['looking_zodiac'] = message.text
+    users_db[user_id] = user_registration[user_id]
+    bot.send_message(user_id, "✅ ပရိုဖိုင် အောင်မြင်ပါသည်။ /match ကို နှိပ်ပြီး ရှာဖွေနိုင်ပါပြီ။", reply_markup=telebot.types.ReplyKeyboardRemove())
+
+@bot.message_handler(commands=['match'])
+def find_match(message):
+    user_id = message.chat.id
+    if user_id not in users_db:
+        bot.send_message(user_id, "/start ကိုနှိပ်ပြီး ပရိုဖိုင် အရင်တည်ဆောက်ပါ။")
         return
-
-    welcome_text = (
-        "🌟 **Social Media Video Downloader Bot** 🌟\n\n"
-        "ကျွန်တော်က အောက်ပါ Platform တွေကနေ ဗီဒီယိုတွေကို အခမဲ့ ဒေါင်းလုဒ်ဆွဲပေးနိုင်ပါတယ်။\n"
-        "✅ TikTok  ✅ Facebook\n"
-        "✅ YouTube ✅ Instagram\n"
-        "✅ X (Twitter)\n\n"
-        "📥 ဒေါင်းလုဒ်ဆွဲဖို့ ဗီဒီယိုလင့်ခ် (Link) ကို ဒီမှာ ပို့ပေးလိုက်ပါ!"
-    )
-    await update.message.reply_text(welcome_text, parse_mode='Markdown')
-
-# --- Message Handler ---
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    url = update.message.text
-
-    if not url.startswith("http"):
+    target_id = next((uid for uid in users_db if uid != user_id), None)
+    if not target_id:
+        bot.send_message(user_id, "လောလောဆယ် ကိုက်ညီသူ မရှိသေးပါ။")
         return
+    tp = users_db[target_id]
+    profile_text = f"🔮 ရာသီခွင်: {tp['zodiac']}\n🎯 ရှာနေတာ: {tp['looking_zodiac']}\n👤 {tp['name']}, {tp['age']} နှစ်\n📍 {tp['city']}\n🎨 {tp['hobby']}\n💼 {tp['job']}"
+    markup = InlineKeyboardMarkup()
+    markup.row(InlineKeyboardButton("❤️ Like", callback_data=f"like_{target_id}"), InlineKeyboardButton("⏭ Skip", callback_data="skip"))
+    bot.send_message(user_id, profile_text, reply_markup=markup)
 
-    # Force Join စစ်မယ်
-    if not await check_joined(user_id, context):
-        await start(update, context)
-        return
-
-    # Link ကို user_data ထဲမှာ အသေအချာ သိမ်းမယ်
-    context.user_data['last_url'] = url
-    
-    keyboard = [[
-        InlineKeyboardButton("📹 ဗီဒီယို ယူမယ်", callback_data="dl_video"),
-        InlineKeyboardButton("🎵 အသံ (Audio) ယူမယ်", callback_data="dl_audio")
-    ]]
-    await update.message.reply_text("👇 ဘယ်လိုပုံစံ ဒေါင်းလုဒ်ဆွဲချင်ပါသလဲ?", reply_markup=InlineKeyboardMarkup(keyboard))
-
-# --- Button Click Handler (Fixes: "လင့်ပြန်ပို့ပေးပါ" error) ---
-async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    # URL ရှိမရှိ သေချာစစ်မယ်
-    url = context.user_data.get('last_url')
-    
-    if not url:
-        await query.message.reply_text("❌ စနစ်ချို့ယွင်းမှုကြောင့် လင့်ခ် ပျောက်သွားပါတယ်။ ကျေးဇူးပြုပြီး လင့်ခ်ကို ပြန်ပို့ပေးပါ။")
-        return
-
-    status_msg = await query.edit_message_text("⏳ ဒေါင်းလုဒ်ဆွဲနေပါပြီ။ ခဏစောင့်ပေးပါ။...")
-
-    try:
-        m_type = 'video' if query.data == 'dl_video' else 'audio'
-        # ဖိုင်နာမည်ကို User ID နဲ့ ခွဲထားမယ် (တခြား user နဲ့ မရောအောင်)
-        file_path = f'dl_{user_id}_{m_type}.mp4'
-        
-        # Multi-platform Support ဖြစ်ဖို့ Option အစုံထည့်ထားတယ်
-        ydl_opts = {
-            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best' if m_type == 'video' else 'bestaudio/best',
-            'outtmpl': file_path,
-            'quiet': True,
-            'no_warnings': True,
-            'nocheckcertificate': True,
-            'ignoreerrors': True
-        }
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-
-        if not os.path.exists(file_path):
-            await query.edit_message_text("❌ ဒေါင်းလုဒ်ဆွဲလို့ မရပါ။ Link မှားနေတာ ဒါမှမဟုတ် ဗီဒီယိုက Private ဖြစ်နေတာ ဖြစ်နိုင်ပါတယ်။")
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    user_id = call.message.chat.id
+    if call.data == "skip":
+        bot.delete_message(user_id, call.message.message_id)
+        bot.send_message(user_id, "ကျော်သွားပါပြီ။ /match ပြန်နှိပ်ပါ။")
+    elif call.data.startswith("like_"):
+        target_id = int(call.data.split("_")[1])
+        bot.send_message(user_id, "❤️ Like လုပ်လိုက်ပါပြီ!")
+        markup = InlineKeyboardMarkup()
+        markup.row(InlineKeyboardButton("✅ လက်ခံမည်", callback_data=f"accept_{user_id}"), InlineKeyboardButton("❌ ငြင်းမည်", callback_data="decline"))
+        bot.send_message(target_id, f"🎉 {users_db[user_id]['zodiac']} က လူတစ်ယောက်က သင့်ကို သဘောကျနေပါတယ်။ လက်ခံမလား?", reply_markup=markup)
+    elif call.data.startswith("accept_"):
+        liker_id = int(call.data.split("_")[1])
+        if not check_channel(user_id):
+            bot.send_message(user_id, f"⚠️ Match ဖြစ်ဖို့ Channel Join ပါ -> {CHANNEL_USERNAME}")
             return
+        bot.send_message(user_id, "✅ Match ဖြစ်သွားပါပြီ!")
+        bot.send_message(liker_id, "💖 Match ဖြစ်သွားပါပြီ!")
 
-        # ဖိုင်ပို့မယ်
-        with open(file_path, 'rb') as f:
-            if m_type == 'video':
-                sent = await context.bot.send_video(chat_id=STORAGE_CHANNEL_ID, video=f, caption="✅ Success")
-            else:
-                sent = await context.bot.send_audio(chat_id=STORAGE_CHANNEL_ID, audio=f, caption="✅ Success")
-            
-            # User ဆီ Copy ပို့မယ်
-            await context.bot.copy_message(
-                chat_id=user_id,
-                from_chat_id=STORAGE_CHANNEL_ID,
-                message_id=sent.message_id
-            )
-
-        # Cleanup
-        if os.path.exists(file_path): os.remove(file_path)
-        await status_msg.delete()
-
-    except Exception as e:
-        logging.error(f"Error: {e}")
-        await query.edit_message_text(f"❌ အခက်အခဲတစ်ခုရှိနေပါတယ်။ နောက်မှ ပြန်စမ်းကြည့်ပါ။")
-
-if __name__ == '__main__':
-    app = ApplicationBuilder().token(TOKEN).build()
-    
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-    app.add_handler(CallbackQueryHandler(button_click))
-    
-    print("Bot is starting with Multi-platform support...")
-    app.run_polling()
+bot.polling(none_stop=True)
