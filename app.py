@@ -1,5 +1,5 @@
 import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
 
 TOKEN = '8651910143:AAFd0mv_MWn_wjnvx6H0brIXXHEtZJ_zvEc'
 CHANNEL_USERNAME = '@yayzatofficial'
@@ -9,12 +9,17 @@ ADMIN_ID = 123456789
 
 bot = telebot.TeleBot(TOKEN)
 
-# Dummy Profiles (စမ်းသပ်ရန်)
 users_db = {
     111: {'name': 'မေ', 'age': '22', 'zodiac': 'Aries', 'city': 'Mandalay', 'hobby': 'စာဖတ်၊ ကော်ဖီသောက်', 'job': 'ကျောင်းသူ', 'gender': 'Female', 'looking_gender': 'Male', 'looking_zodiac': 'Any', 'photo': 'https://via.placeholder.com/400x400.png?text=May'},
     222: {'name': 'ကိုကို', 'age': '26', 'zodiac': 'Leo', 'city': 'Yangon', 'hobby': 'ဂိမ်း၊ ခရီးသွား', 'job': 'IT', 'gender': 'Male', 'looking_gender': 'Female', 'looking_zodiac': 'Any', 'photo': 'https://via.placeholder.com/400x400.png?text=Ko+Ko'}
 } 
 user_registration = {}
+
+# အမြဲပေါ်နေမယ့် ပင်မ Menu ခလုတ်များ ဖန်တီးသည့် Function
+def main_menu_keyboard():
+    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.row(KeyboardButton("🔍 ဖူးစာရှာမည်"), KeyboardButton("👤 ကိုယ့်ပရိုဖိုင်"))
+    return markup
 
 def check_channel(user_id):
     try:
@@ -28,7 +33,8 @@ def start_bot(message):
     user_id = message.chat.id
     user_count = len(users_db)
     greeting = f"✨ *Yay Zat Zodiac မှ နွေးထွေးစွာ ကြိုဆိုပါတယ်!* ✨\n\n📊 လက်ရှိ ရေစက်ရှာဖွေနေသူပေါင်း: {user_count} ယောက်\n\nသင်နဲ့ ရေစက်ပါတဲ့ ဖူးစာရှင်ကို ရှာဖွေဖို့ အောက်က မေးခွန်းလေးတွေကို ဖြေပေးပါနော်။\n\nသင့်ရဲ့ *နာမည် (သို့) အမည်ဝှက်* ကို ရိုက်ထည့်ပါ-"
-    bot.send_message(user_id, greeting, parse_mode="Markdown")
+    # ပရိုဖိုင်စဖြည့်ချိန်မှာ အဟောင်း Menu တွေဖျောက်ထားရန် ReplyKeyboardRemove သုံးသည်
+    bot.send_message(user_id, greeting, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
     bot.register_next_step_handler(message, process_name)
 
 def process_name(message):
@@ -49,7 +55,7 @@ def process_age(message):
 def process_zodiac(message):
     user_id = message.chat.id
     user_registration[user_id]['zodiac'] = message.text
-    bot.send_message(user_id, "နေထိုင်တဲ့ မြို့ကို ရိုက်ထည့်ပါ (ဥပမာ - Mandalay, Yangon)-", reply_markup=telebot.types.ReplyKeyboardRemove())
+    bot.send_message(user_id, "နေထိုင်တဲ့ မြို့ကို ရိုက်ထည့်ပါ (ဥပမာ - Mandalay, Yangon)-", reply_markup=ReplyKeyboardRemove())
     bot.register_next_step_handler(message, process_city)
 
 def process_city(message):
@@ -92,7 +98,7 @@ def process_looking_gender(message):
 def process_looking_zodiac(message):
     user_id = message.chat.id
     user_registration[user_id]['looking_zodiac'] = message.text
-    bot.send_message(user_id, "နောက်ဆုံးအနေနဲ့ သင့်ရဲ့ ဓာတ်ပုံတစ်ပုံ (Profile Picture) ကို ပေးပို့ပါ 📸", reply_markup=telebot.types.ReplyKeyboardRemove())
+    bot.send_message(user_id, "နောက်ဆုံးအနေနဲ့ သင့်ရဲ့ ဓာတ်ပုံတစ်ပုံ (Profile Picture) ကို ပေးပို့ပါ 📸", reply_markup=ReplyKeyboardRemove())
     bot.register_next_step_handler(message, process_photo)
 
 def process_photo(message):
@@ -105,7 +111,16 @@ def process_photo(message):
     user_registration[user_id]['photo'] = file_id
     users_db[user_id] = user_registration[user_id]
     
-    bot.send_message(user_id, "✅ ပရိုဖိုင် အောင်မြင်စွာ တည်ဆောက်ပြီးပါပြီ!\n\n🔍 /match ကိုနှိပ်ပြီး ဖူးစာရှာနိုင်ပါပြီ။\n👤 /myprofile ကိုနှိပ်ပြီး သင့်ပရိုဖိုင်ကို ပြန်ကြည့်နိုင်ပါသည်။")
+    # ပရိုဖိုင်ဖြည့်ပြီးပါက ပင်မ Menu ကို ဖော်ပြပေးမည်
+    bot.send_message(user_id, "✅ ပရိုဖိုင် အောင်မြင်စွာ တည်ဆောက်ပြီးပါပြီ!\n\nအောက်က ခလုတ်များကို နှိပ်ပြီး အသုံးပြုနိုင်ပါပြီ 👇", reply_markup=main_menu_keyboard())
+
+# --- Menu Buttons Handler ---
+@bot.message_handler(func=lambda message: message.text in ["🔍 ဖူးစာရှာမည်", "👤 ကိုယ့်ပရိုဖိုင်"])
+def handle_menu_buttons(message):
+    if message.text == "🔍 ဖူးစာရှာမည်":
+        find_match(message)
+    elif message.text == "👤 ကိုယ့်ပရိုဖိုင်":
+        my_profile(message)
 
 @bot.message_handler(commands=['myprofile'])
 def my_profile(message):
@@ -138,7 +153,7 @@ def save_single_edit(message, field):
     else:
         users_db[user_id][field] = message.text
         
-    bot.send_message(user_id, "✅ ပြင်ဆင်မှု အောင်မြင်ပါသည်။ /myprofile ကိုနှိပ်ပြီး ပြန်ကြည့်နိုင်ပါသည်။")
+    bot.send_message(user_id, "✅ ပြင်ဆင်မှု အောင်မြင်ပါသည်။ အောက်ပါ Menu မှတဆင့် ဆက်လက်အသုံးပြုပါ။", reply_markup=main_menu_keyboard())
 
 @bot.message_handler(commands=['match'])
 def find_match(message):
@@ -153,7 +168,6 @@ def find_match(message):
     candidates = []
     for uid, data in users_db.items():
         if uid == user_id: continue
-        # Gender Filtering
         if user_data['looking_gender'] != 'Both' and user_data['looking_gender'] != 'Any':
             if data['gender'] != user_data['looking_gender']:
                 continue
@@ -163,7 +177,6 @@ def find_match(message):
         bot.send_message(user_id, "😔 လောလောဆယ် သင့်အတွက် ကိုက်ညီသူ မရှိသေးပါ။ နောက်မှ ပြန်ကြိုးစားကြည့်ပါ။")
         return
 
-    # Location Based Sorting (Same City First)
     candidates.sort(key=lambda x: 0 if user_city in x[1]['city'].lower() or x[1]['city'].lower() in user_city else 1)
     
     target_id = candidates[0][0]
@@ -183,24 +196,23 @@ def find_match(message):
 def callback_query(call):
     user_id = call.message.chat.id
     
-    # --- Edit Profile Callbacks ---
     if call.data.startswith("edit_"):
         field = call.data.split("_")[1]
         bot.delete_message(user_id, call.message.message_id)
         if field == "all":
-            bot.send_message(user_id, "ပရိုဖိုင် အသစ်ပြန်လုပ်ပါမည်။ သင့်နာမည်ကို ရိုက်ထည့်ပါ-")
+            bot.send_message(user_id, "ပရိုဖိုင် အသစ်ပြန်လုပ်ပါမည်။ သင့်နာမည်ကို ရိုက်ထည့်ပါ-", reply_markup=ReplyKeyboardRemove())
             bot.register_next_step_handler(call.message, process_name)
         elif field == "photo":
-            msg = bot.send_message(user_id, "📸 ဓာတ်ပုံအသစ်ကို ပေးပို့ပါ-")
+            msg = bot.send_message(user_id, "📸 ဓာတ်ပုံအသစ်ကို ပေးပို့ပါ-", reply_markup=ReplyKeyboardRemove())
             bot.register_next_step_handler(msg, save_single_edit, field)
         else:
-            msg = bot.send_message(user_id, f"📝 အချက်အလက်အသစ်ကို ရိုက်ထည့်ပါ-")
+            msg = bot.send_message(user_id, f"📝 အချက်အလက်အသစ်ကို ရိုက်ထည့်ပါ-", reply_markup=ReplyKeyboardRemove())
             bot.register_next_step_handler(msg, save_single_edit, field)
 
-    # --- Match Callbacks ---
     elif call.data == "skip":
         bot.delete_message(user_id, call.message.message_id)
-        bot.send_message(user_id, "ကျော်သွားပါပြီ။ /match ပြန်နှိပ်ပြီး ထပ်ရှာပါ။")
+        # Skip နှိပ်ပါက နောက်တစ်ယောက်ကို ဆက်ရှာရန် ခေါ်ပေးသည်
+        find_match(call.message)
         
     elif call.data.startswith("like_"):
         target_id = int(call.data.split("_")[1])
@@ -217,19 +229,18 @@ def callback_query(call):
     elif call.data.startswith("accept_"):
         liker_id = int(call.data.split("_")[1])
         
-        # Admin Notification
         try:
             admin_noti = f"🔔 *New Match Alert!*\n\n[User 1](tg://user?id={user_id}) နှင့် [User 2](tg://user?id={liker_id}) တို့ Match ဖြစ်သွားပါပြီ! 💖"
             bot.send_message(ADMIN_ID, admin_noti, parse_mode="Markdown")
         except:
-            pass # Admin ID မှားနေလျှင် Error မတက်စေရန်
+            pass 
 
-        # Share Telegram Accounts Link
         bot.send_message(user_id, f"💖 *Match ဖြစ်သွားပါပြီ!*\n\nသူ့ရဲ့ Telegram အကောင့်ကို [ဒီမှာနှိပ်ပြီး](tg://user?id={liker_id}) စကားသွားပြောလို့ ရပါပြီ။", parse_mode="Markdown")
         try:
             bot.send_message(liker_id, f"💖 *Match ဖြစ်သွားပါပြီ!*\n\nသူ့ရဲ့ Telegram အကောင့်ကို [ဒီမှာနှိပ်ပြီး](tg://user?id={user_id}) စကားသွားပြောလို့ ရပါပြီ။", parse_mode="Markdown")
         except:
             pass
+        bot.delete_message(user_id, call.message.message_id)
 
     elif call.data == "decline":
         bot.delete_message(user_id, call.message.message_id)
