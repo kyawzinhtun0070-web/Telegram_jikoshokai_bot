@@ -5,7 +5,7 @@ TOKEN = '8651910143:AAFd0mv_MWn_wjnvx6H0brIXXHEtZJ_zvEc'
 CHANNEL_USERNAME = '@yayzatofficial'
 
 # ⚠️ အောက်က 123456789 နေရာမှာ မိတ်ဆွေရဲ့ Telegram ID အစစ်ကို ပြောင်းထည့်ပါ။
-ADMIN_ID = 123456789 
+ADMIN_ID = -1003641016541 
 
 bot = telebot.TeleBot(TOKEN)
 
