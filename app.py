@@ -9,7 +9,7 @@ CHANNEL_ID = -1003641016541
 CHANNEL_LINK = "https://t.me/yayzatofficial"
 
 # ⚠️ အောက်က 123456789 နေရာမှာ မိတ်ဆွေရဲ့ Telegram ID ပြောင်းထည့်ရန် မမေ့ပါနဲ့!
-ADMIN_ID = 123456789 
+ADMIN_ID = 8101049053 
 
 bot = telebot.TeleBot(TOKEN)
 DB_FILE = 'users_db.json'
