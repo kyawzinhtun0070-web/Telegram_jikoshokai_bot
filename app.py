@@ -433,13 +433,13 @@ class Keyboards:
 # 🔧 SECTION 7: FORMATTERS & UTILITIES
 # ═══════════════════════════════════════════════════════════════════════════
 
-def safe_get(data: Optional[Dict], key: str, fallback: str = '—') -> str:
+def safe_get( Optional[Dict], key: str, fallback: str = '—') -> str:
     """Safely extract and clean string from dictionary."""
-    if not data: return fallback
+    if not  return fallback
     val = data.get(key)
     return str(val).strip() if val and str(val).strip() else fallback
 
-# ✅ FIXED: User count completely removed from profile formatterdef fmt_profile(user_data: Dict[str, Any], title: str = '👤 *ပရိုဖိုင်*') -> str:
+# ✅ FIXED: User count completely removed from profile formatterdef fmt_profile(user_ Dict[str, Any], title: str = '👤 *ပရိုဖိုင်*') -> str:
     """Format user profile for display. NO user count shown to regular users."""
     bio_line = f"\n📝 အကြောင်း : {safe_get(user_data, 'bio')}" if user_data.get('bio') else ''
     ltype = safe_get(user_data, 'looking_type', '')
@@ -749,7 +749,7 @@ def on_callback(call: CallbackQuery) -> None:
         try: bot.answer_callback_query(call.id, "⚠️ အဆင်မပြေပါ။", show_alert=True)
         except: pass
 
-def _process_callback(call: CallbackQuery, uid: int, data: str) -> None:
+def _process_callback(call: CallbackQuery, uid: int,  str) -> None:
     # Profile Editing
     if data.startswith("edit_"):
         field = data[5:]
