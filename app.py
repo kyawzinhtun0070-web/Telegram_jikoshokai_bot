@@ -1,440 +1,1049 @@
 """
-Yay Zat Zodiac Bot — Full Production Version
-✅ Fixed: Syntax, Skip Flow, Match-Triggered Unlock, Referral Count
+Yay Zat Zodiac Bot — Stable Release
 """
 import telebot
 import sqlite3
 import threading
-import time
 import traceback
+import time
+import requests as _req
 from datetime import datetime
 from telebot.types import (
     InlineKeyboardMarkup, InlineKeyboardButton,
     ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
 )
 
-# ═══════════════════════════════════════════════════════════════
-# 🔑  CONFIG
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════
+# CONFIG
+# ═══════════════════════════════════════
 TOKEN        = '8651910143:AAFd0mv_MWn_wjnvx6H0brIXXHEtZJ_zvEc'
 CHANNEL_ID   = -1003641016541
 CHANNEL_LINK = "https://t.me/yayzatofficial"
 ADMIN_ID     = 6131831207
-BOT_USERNAME = "YayZatBot"
+BOT_USERNAME = "YayZatBot"   # ← @ မပါ သင့် bot username
 SHARE_NEEDED = 7
 
 ZODIACS = ['Aries','Taurus','Gemini','Cancer','Leo','Virgo',
            'Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces']
 
-bot = telebot.TeleBot(TOKEN, threaded=True, skip_pending=True)
+bot = telebot.TeleBot(TOKEN, threaded=True)
 
-# ═══════════════════════════════════════════════════════════════
-# 💾  DATABASE (Thread-Safe & Auto-Fix)
-# ═══════════════════════════════════════════════════════════════
-DB_FILE = 'yayzat.db'
-_db_lock = threading.Lock()
-_db = None
+# ═══════════════════════════════════════
+# DATABASE
+# ═══════════════════════════════════════
+DB_FILE  = 'yayzat.db'
+_lock    = threading.Lock()
+_db      = None
 
-def get_db():
+def open_db():
     global _db
-    if _db is None:
-        _db = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=15)
-        _db.row_factory = sqlite3.Row
-        _db.execute("PRAGMA journal_mode=WAL")
-        _db.execute("PRAGMA busy_timeout=10000")
-    return _db
+    c = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=15)
+    c.row_factory = sqlite3.Row
+    c.execute("PRAGMA journal_mode=WAL")
+    c.execute("PRAGMA busy_timeout=5000")
+    _db = c
+    return c
 
-def execute_query(sql, params=(), commit=False):
-    with _db_lock:
-        db = get_db()
-        try:            cur = db.execute(sql, params)
-            if commit: db.commit()
-            return cur
-        except sqlite3.OperationalError:
-            global _db
-            _db = None
-            db = get_db()
-            cur = db.execute(sql, params)
-            if commit: db.commit()
-            return cur
+open_db()
+
+def xq(sql, p=()):
+    global _db
+    with _lock:
+        for _ in range(3):
+            try:
+                cur = _db.execute(sql, p)
+                _db.commit()
+                return cur
+            except sqlite3.OperationalError:
+                try: open_db()
+                except: pass
+                time.sleep(0.3)
+
+def xr(sql, p=()):
+    global _db
+    with _lock:
+        for _ in range(3):
+            try:
+                return _db.execute(sql, p)
+            except sqlite3.OperationalError:
+                try: open_db()
+                except: pass
+                time.sleep(0.3)
+        return None
 
 def init_db():
-    execute_query('''CREATE TABLE IF NOT EXISTS users (
-        user_id INTEGER PRIMARY KEY, name TEXT, age TEXT, zodiac TEXT,
-        city TEXT, hobby TEXT, job TEXT, song TEXT, bio TEXT,
-        gender TEXT, looking_gender TEXT, looking_zodiac TEXT,
-        looking_type TEXT, photo TEXT, stars INTEGER DEFAULT 0,
-        created_at TEXT, updated_at TEXT)''', commit=True)
-    execute_query('CREATE TABLE IF NOT EXISTS seen (user_id INTEGER, seen_id INTEGER, PRIMARY KEY (user_id, seen_id))', commit=True)
-    execute_query('CREATE TABLE IF NOT EXISTS reports (reporter_id INTEGER, reported_id INTEGER, PRIMARY KEY (reporter_id, reported_id))', commit=True)
-    execute_query('CREATE TABLE IF NOT EXISTS referrals (referrer_id INTEGER, referred_id INTEGER, PRIMARY KEY (referrer_id, referred_id))', commit=True)
-    execute_query('CREATE TABLE IF NOT EXISTS pending_match (user_id INTEGER PRIMARY KEY, partner_id INTEGER, created_at TEXT)', commit=True)
-
-    # Auto-add missing columns
-    db = get_db()
-    cols = [row[1] for row in db.execute("PRAGMA table_info(users)").fetchall()]
-    for col, typ in [('bio','TEXT'), ('song','TEXT'), ('looking_type','TEXT'), ('stars','INTEGER DEFAULT 0')]:
-        if col not in cols:
-            try: execute_query(f"ALTER TABLE users ADD COLUMN {col} {typ}", commit=True)
+    xq('''CREATE TABLE IF NOT EXISTS users (
+        user_id        INTEGER PRIMARY KEY,
+        name           TEXT,
+        age            TEXT,
+        zodiac         TEXT,
+        city           TEXT,
+        hobby          TEXT,
+        job            TEXT,
+        song           TEXT,
+        bio            TEXT,
+        gender         TEXT,
+        looking_gender TEXT,
+        looking_zodiac TEXT,
+        looking_type   TEXT,
+        photo          TEXT,
+        stars          INTEGER DEFAULT 0,
+        created_at     TEXT DEFAULT (datetime('now','localtime')),
+        updated_at     TEXT DEFAULT (datetime('now','localtime'))
+    )''')
+    xq('''CREATE TABLE IF NOT EXISTS seen (
+        user_id INTEGER, seen_id INTEGER,
+        PRIMARY KEY (user_id, seen_id)
+    )''')
+    xq('''CREATE TABLE IF NOT EXISTS reports (
+        reporter_id INTEGER, reported_id INTEGER,
+        PRIMARY KEY (reporter_id, reported_id)
+    )''')
+    xq('''CREATE TABLE IF NOT EXISTS referrals (
+        referrer_id INTEGER, referred_id INTEGER,
+        PRIMARY KEY (referrer_id, referred_id)
+    )''')
+    xq('''CREATE TABLE IF NOT EXISTS pending_match (
+        user_id INTEGER PRIMARY KEY, partner_id INTEGER
+    )''')
+    # safe column migration
+    ex = {r[1] for r in (xr("PRAGMA table_info(users)") or [])}
+    for col, typ in [('bio','TEXT'),('song','TEXT'),
+                     ('looking_type','TEXT'),('stars','INTEGER DEFAULT 0')]:
+        if col not in ex:
+            try: xq(f"ALTER TABLE users ADD COLUMN {col} {typ}")
             except: pass
+
 init_db()
 
-# ═══════════════════════════════════════════════════════════════
-# 🔧  HELPERS
-# ═══════════════════════════════════════════════════════════════
-user_reg = {}
+UFIELDS = ['name','age','zodiac','city','hobby','job','song','bio',
+           'gender','looking_gender','looking_zodiac','looking_type','photo','stars']
 
-def safe(d, k, fb='—'):
-    v = (d or {}).get(k)
-    return str(v).strip() if v else fb
+def db_get(uid):
+    r = xr('SELECT * FROM users WHERE user_id=?',(uid,))
+    row = r.fetchone() if r else None
+    return dict(row) if row else None
 
-def get_user(uid):
-    try:
-        r = execute_query("SELECT * FROM users WHERE user_id=?", (uid,))
-        row = r.fetchone()
-        return dict(row) if row else None
-    except: return None
+def db_save(uid, data):
+    old = db_get(uid)
+    if old:
+        if not data.get('photo') and old.get('photo'):
+            data['photo'] = old['photo']
+        data['stars'] = old.get('stars', 0)
+    else:
+        data.setdefault('stars', 0)
+    cols = ','.join(UFIELDS)
+    ph   = ','.join(['?']*len(UFIELDS))
+    vals = [data.get(f) for f in UFIELDS]
+    upd  = ','.join([f"{f}=excluded.{f}" for f in UFIELDS])
+    xq(f"INSERT INTO users (user_id,{cols},updated_at) "
+       f"VALUES(?,{ph},datetime('now','localtime')) "
+       f"ON CONFLICT(user_id) DO UPDATE SET {upd},"
+       f"updated_at=datetime('now','localtime')",
+       [uid]+vals)
 
-def save_user(uid, data):
-    old = get_user(uid)    if old and 'photo' not in data:
-        data['photo'] = old.get('photo')
-    data['stars'] = old.get('stars', 0) if old else 0
-    cols = list(data.keys())
-    vals = list(data.values())
-    placeholders = ','.join(['?']*len(cols))
-    updates = ','.join([f"{c}=excluded.{c}" for c in cols])
-    sql = f"INSERT INTO users (user_id,{','.join(cols)},updated_at) VALUES (?,{placeholders},datetime('now')) ON CONFLICT(user_id) DO UPDATE SET {updates},updated_at=datetime('now')"
-    execute_query(sql, [uid]+vals, commit=True)
+def db_update(uid, field, val):
+    if field not in set(UFIELDS): return
+    xq(f"UPDATE users SET {field}=?,updated_at=datetime('now','localtime') "
+       f"WHERE user_id=?", (val, uid))
 
-def delete_user(uid):
-    execute_query("DELETE FROM users WHERE user_id=?", (uid,), commit=True)
-    execute_query("DELETE FROM seen WHERE user_id=? OR seen_id=?", (uid, uid), commit=True)
+def db_delete(uid):
+    xq('DELETE FROM users WHERE user_id=?',(uid,))
+    xq('DELETE FROM seen WHERE user_id=? OR seen_id=?',(uid,uid))
+    xq('DELETE FROM pending_match WHERE user_id=? OR partner_id=?',(uid,uid))
 
-def get_ref_count(uid):
-    r = execute_query("SELECT COUNT(*) FROM referrals WHERE referrer_id=?", (uid,))
+def db_all():  return [dict(r) for r in (xr('SELECT * FROM users') or [])]
+def db_ids():  return [r[0] for r in (xr('SELECT user_id FROM users') or [])]
+def db_count():
+    r = xr('SELECT COUNT(*) FROM users')
     return r.fetchone()[0] if r else 0
 
-def is_unlocked(uid):
-    return uid == ADMIN_ID or get_ref_count(uid) >= SHARE_NEEDED
+def db_seen_add(u,s):  xq('INSERT OR IGNORE INTO seen VALUES(?,?)',(u,s))
+def db_seen_get(uid):
+    r = xr('SELECT seen_id FROM seen WHERE user_id=?',(uid,))
+    return {x[0] for x in r} if r else set()
+def db_seen_clear(uid): xq('DELETE FROM seen WHERE user_id=?',(uid,))
 
-# ═══════════════════════════════════════════════════════════════
-# ⌨️  KEYBOARDS
-# ═══════════════════════════════════════════════════════════════
+def db_report(a,b): xq('INSERT OR IGNORE INTO reports VALUES(?,?)',(a,b))
+def db_reported_by(uid):
+    r = xr('SELECT reported_id FROM reports WHERE reporter_id=?',(uid,))
+    return {x[0] for x in r} if r else set()
+
+def db_ref_add(referrer, referred):
+    xq('INSERT OR IGNORE INTO referrals(referrer_id,referred_id) VALUES(?,?)',
+       (referrer, referred))
+    xq('UPDATE users SET stars=stars+1 WHERE user_id=?',(referrer,))
+
+def db_ref_count(uid):
+    r = xr('SELECT COUNT(*) FROM referrals WHERE referrer_id=?',(uid,))
+    return r.fetchone()[0] if r else 0
+
+def db_is_unlocked(uid):
+    if uid == ADMIN_ID: return True
+    return db_ref_count(uid) >= SHARE_NEEDED
+
+def pm_set(uid, pid):  xq('INSERT OR REPLACE INTO pending_match VALUES(?,?)',(uid,pid))
+def pm_get(uid):
+    r = xr('SELECT partner_id FROM pending_match WHERE user_id=?',(uid,))
+    row = r.fetchone() if r else None
+    return row[0] if row else None
+def pm_clear(uid): xq('DELETE FROM pending_match WHERE user_id=?',(uid,))
+
+def db_stats():
+    def n(q): r=xr(q); return r.fetchone()[0] if r else 0
+    unlocked = sum(1 for uid in db_ids() if db_ref_count(uid) >= SHARE_NEEDED)
+    return {
+        'total'   : n('SELECT COUNT(*) FROM users'),
+        'male'    : n("SELECT COUNT(*) FROM users WHERE gender='Male'"),
+        'female'  : n("SELECT COUNT(*) FROM users WHERE gender='Female'"),
+        'photo'   : n('SELECT COUNT(*) FROM users WHERE photo IS NOT NULL'),
+        'refs'    : n('SELECT COUNT(*) FROM referrals'),
+        'unlocked': unlocked,
+    }
+
+# ═══════════════════════════════════════
+# KEYBOARDS
+# ═══════════════════════════════════════
 def main_kb():
     m = ReplyKeyboardMarkup(resize_keyboard=True, is_persistent=True)
     m.row(KeyboardButton("🔍 ဖူးစာရှာမည်"), KeyboardButton("👤 ကိုယ့်ပရိုဖိုင်"))
-    m.row(KeyboardButton("ℹ️ အကူအညီ"), KeyboardButton("🔄 Profile ပြန်လုပ်"))
+    m.row(KeyboardButton("ℹ️ အကူအညီ"),      KeyboardButton("🔄 Profile ပြန်လုပ်"))
     return m
 
-# ═══════════════════════════════════════════════════════════════
-# 🚀  START & REFERRAL
-# ═══════════════════════════════════════════════════════════════
-@bot.message_handler(commands=['start'])
-def cmd_start(m):
-    uid = m.chat.id
-    parts = m.text.split()
-    if len(parts) > 1 and parts[1].startswith('ref_'):
-        try:
-            ref_uid = int(parts[1][4:])
-            if ref_uid != uid and get_user(ref_uid) and not get_user(uid):
-                execute_query("INSERT OR IGNORE INTO referrals VALUES(?,?)", (ref_uid, uid), commit=True)
-        except: pass
+def admin_kb():
+    m = ReplyKeyboardMarkup(resize_keyboard=True, is_persistent=True)
+    m.row(KeyboardButton("🔍 ဖူးစာရှာမည်"), KeyboardButton("👤 ကိုယ့်ပရိုဖိုင်"))
+    m.row(KeyboardButton("ℹ️ အကူအညီ"),      KeyboardButton("🔄 Profile ပြန်လုပ်"))
+    m.row(KeyboardButton("📊 စာရင်းအင်း"),   KeyboardButton("🛠 Admin Panel"))
+    return m
 
-    if get_user(uid):
-        bot.send_message(uid, "✨ ကြိုဆိုပါတယ်! ခလုတ်များနှိပ်ပြီး အသုံးပြုနိုင်ပါပြီ 👇", reply_markup=main_kb())
-    else:
-        user_reg[uid] = {}
-        bot.send_message(uid, "✨ Yay Zat Zodiac မှ ကြိုဆိုပါတယ်! ✨\n\nဖူးစာရှင်ရှာဖို့ မေးခွန်းလေးတွေ ဖြေပေးပါ 🙏\n_( /skip — ကျော်ချင်ရင် )_\n\n📛 နာမည် -", parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
-        bot.register_next_step_handler(m, reg_name)
-# ═══════════════════════════════════════════════════════════════
-# 📝  REGISTRATION FLOW (Robust Skip Handling)
-# ═══════════════════════════════════════════════════════════════
-def next_step(m, func, prompt, kb=None):
+def kb(uid): return admin_kb() if uid == ADMIN_ID else main_kb()
+
+# ═══════════════════════════════════════
+# UTILS
+# ═══════════════════════════════════════
+def sf(d, k, fb='—'):
+    v = (d or {}).get(k)
+    if isinstance(v, str): v = v.strip()
+    return v if v else fb
+
+def is_cmd(text):
+    return text and text.startswith('/')
+
+def check_ch(uid):
     try:
-        bot.send_message(m.chat.id, prompt, reply_markup=kb, parse_mode="Markdown")
-        bot.register_next_step_handler(m, func)
-    except Exception as e:
-        print(f"Reg step error: {e}")
-        bot.send_message(m.chat.id, "⚠️ အဆင်မပြေပါ။ /start ထပ်နှိပ်ပါ")
+        return bot.get_chat_member(CHANNEL_ID,uid).status in (
+            'member','creator','administrator')
+    except: return False
 
-def reg_name(m):
-    uid = m.chat.id
-    if m.text and m.text.strip() != '/skip': user_reg.setdefault(uid,{})['name'] = m.text.strip()
-    next_step(m, reg_age, "🎂 အသက်? `(/skip)`-")
+def notify_admin(txt):
+    try: bot.send_message(ADMIN_ID, txt, parse_mode="Markdown")
+    except: pass
 
-def reg_age(m):
+def err_notify(ctx, e, uid=None):
+    tb = traceback.format_exc()[-500:]
+    msg = (f"🔴 *Bot Error*\n📍 `{ctx}`\n"
+           f"👤 `{uid}`\n❌ `{type(e).__name__}: {e}`\n"
+           f"⏰ {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n"
+           f"```\n{tb}```")
+    try:
+        _req.post(
+            f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+            json={"chat_id":ADMIN_ID,"text":msg,"parse_mode":"Markdown"},
+            timeout=8)
+    except: pass
+
+def fmt(tp, title='👤 *ပရိုဖိုင်*'):
+    bio   = f"\n📝 အကြောင်း  : {sf(tp,'bio')}"         if (tp or {}).get('bio')          else ''
+    ltype = f"\n🎯 ရှာဖွေရန်  : {sf(tp,'looking_type')}" if (tp or {}).get('looking_type') else ''
+    return (
+        f"{title}\n\n"
+        f"📛 နာမည်   : {sf(tp,'name')}\n"
+        f"🎂 အသက်   : {sf(tp,'age')} နှစ်\n"
+        f"🔮 ရာသီ   : {sf(tp,'zodiac')}\n"
+        f"📍 မြို့    : {sf(tp,'city')}\n"
+        f"🎨 ဝါသနာ  : {sf(tp,'hobby')}\n"
+        f"💼 အလုပ်   : {sf(tp,'job')}\n"
+        f"🎵 သီချင်း  : {sf(tp,'song')}"
+        f"{bio}{ltype}\n"
+        f"⚧ လိင်    : {sf(tp,'gender')}\n"
+        f"💑 ရှာဖွေ  : {sf(tp,'looking_gender')} / {sf(tp,'looking_zodiac','Any')}"
+    )
+
+def stars_str(n):
+    n = max(0, min(int(n or 0), 10))
+    return ('⭐' * n) if n > 0 else 'မရှိသေး'
+
+def inv_link(uid): return f"https://t.me/{BOT_USERNAME}?start=ref_{uid}"
+
+# ═══════════════════════════════════════
+# SHARE GATE
+# ═══════════════════════════════════════
+def share_gate(uid):
+    cnt  = db_ref_count(uid)
+    need = max(0, SHARE_NEEDED - cnt)
+    link = inv_link(uid)
+    m = InlineKeyboardMarkup()
+    m.row(InlineKeyboardButton(
+        "📤 မိတ်ဆွေများကို Share လုပ်မည်",
+        url=(f"https://t.me/share/url?url={link}"
+             f"&text=✨+Yay+Zat+Zodiac+Bot+မှာ+ဖူးစာရှာနိုင်ပါတယ်+💖")))
+    m.row(InlineKeyboardButton(
+        "✅ Share ပြီးပြီ — Join စစ်မည်",
+        callback_data="chk_share"))
+    bot.send_message(uid,
+        f"🔒 *ဖူးစာရှာရန် Unlock လိုအပ်ပါသည်*\n\n"
+        f"မိတ်ဆွေ *{SHARE_NEEDED}* ယောက် Bot ကိုသုံးစေပြီးမှ\n"
+        f"ဖူးစာရှင်ရဲ့ Telegram link ကို ပေးမည်ဖြစ်ပါသည် 🙏\n\n"
+        f"📊 Join ဖြစ်သူ : *{cnt} / {SHARE_NEEDED}*\n"
+        f"🎯 ကျန်        : *{need}* ယောက်\n\n"
+        f"🔗 `{link}`\n\nShare ပြီးရင် ✅ ကိုနှိပ်ပြီး စစ်ဆေးပေးပါ 👇",
+        parse_mode="Markdown", reply_markup=m)
+
+def try_deliver_match(me, partner):
+    """Unlock ဖြစ်ရင် link ချပေး၊ မဖြစ်ရင် pending သိမ်း"""
+    if db_is_unlocked(me):
+        pd = db_get(partner)
+        pname = sf(pd,'name','ဖူးစာရှင်')
+        try:
+            bot.send_message(me,
+                f"💖 *Match ဖြစ်သွားပါပြီ!*\n\n"
+                f"[ဒီမှာနှိပ်ပြီး](tg://user?id={partner}) "
+                f"{pname} နဲ့ စကားပြောနိုင်ပါပြီ 🎉",
+                parse_mode="Markdown", reply_markup=kb(me))
+        except Exception as e:
+            err_notify('deliver_match', e, me)
+    else:
+        pm_set(me, partner)
+        share_gate(me)
+
+# ═══════════════════════════════════════
+# REGISTRATION
+# ═══════════════════════════════════════
+_reg = {}   # uid -> dict
+
+def clear_reg(uid):
+    _reg.pop(uid, None)
+    try: bot.clear_step_handler_by_chat_id(uid)
+    except: pass
+
+def reg_set(uid, k, v):
+    _reg.setdefault(uid, {})[k] = v
+
+# Each step checks for /command → abort gracefully
+def _step(fn):
+    def w(msg):
+        uid = msg.chat.id
+        # if user typed a command mid-flow, abort
+        if is_cmd(msg.text) and msg.text.split()[0] not in ('/skip',):
+            clear_reg(uid)
+            bot.send_message(uid,
+                "⚠️ မှတ်ပုံတင်ခြင်း ရပ်တန့်ပြီးပါပြီ။\n"
+                "ပြန်စရန် /start ကိုနှိပ်ပါ။",
+                reply_markup=kb(uid))
+            return
+        try:
+            fn(msg)
+        except Exception as e:
+            err_notify(f'reg/{fn.__name__}', e, uid)
+            bot.send_message(uid,
+                "⚠️ တစ်ခုခုမှားသွားပါသည်。/start ကိုနှိပ်ပြီး ပြန်စပါ。")
+    return w
+
+def ask(uid, text, markup=None, parse_mode="Markdown"):
+    if markup:
+        bot.send_message(uid, text, reply_markup=markup, parse_mode=parse_mode)
+    else:
+        bot.send_message(uid, text, parse_mode=parse_mode)
+
+@_step
+def s_name(m):
     uid = m.chat.id
-    if m.text and m.text.strip() != '/skip':
-        if m.text.strip().isdigit(): user_reg.setdefault(uid,{})['age'] = m.text.strip()
+    if m.text and m.text != '/skip': reg_set(uid,'name',m.text.strip())
+    ask(uid, "🎂 အသက် ဘယ်လောက်လဲ? (/skip)-")
+    bot.register_next_step_handler(m, s_age)
+
+@_step
+def s_age(m):
+    uid = m.chat.id
+    if m.text and m.text != '/skip':
+        if m.text.strip().isdigit():
+            reg_set(uid,'age',m.text.strip())
         else:
-            bot.send_message(uid, "⚠️ ဏန်းသာ ထည့်ပါ (သို့) `/skip`-")
-            bot.register_next_step_handler(m, reg_age); return
+            ask(uid,"⚠️ ဂဏန်းသာ ရိုက်ပါ (ဥပမာ 25)   (/skip)-")
+            bot.register_next_step_handler(m, s_age)
+            return
     mk = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-    mk.add(*ZODIACS); mk.add('/skip')
-    next_step(m, reg_zodiac, "🔮 ရာသီခွင်?", mk)
+    for z in ZODIACS: mk.add(z)
+    mk.add('/skip')
+    bot.send_message(uid, "🔮 ရာသီခွင်?", reply_markup=mk)
+    bot.register_next_step_handler(m, s_zodiac)
 
-def reg_zodiac(m):
+@_step
+def s_zodiac(m):
     uid = m.chat.id
-    if m.text and m.text.strip() != '/skip': user_reg.setdefault(uid,{})['zodiac'] = m.text.strip()
-    next_step(m, reg_city, "📍 မြို့ (ဥပမာ Mandalay)? `(/skip)`-")
+    if m.text and m.text != '/skip': reg_set(uid,'zodiac',m.text.strip())
+    bot.send_message(uid,"📍 မြို့ (ဥပမာ Mandalay)? (/skip)-",
+                     reply_markup=ReplyKeyboardRemove())
+    bot.register_next_step_handler(m, s_city)
 
-def reg_city(m):
+@_step
+def s_city(m):
     uid = m.chat.id
-    if m.text and m.text.strip() != '/skip': user_reg.setdefault(uid,{})['city'] = m.text.strip()
-    next_step(m, reg_hobby, "🎨 ဝါသနာ (ဥပမာ ခရီးသွား,ဂီတ)? `(/skip)`-")
+    if m.text and m.text != '/skip': reg_set(uid,'city',m.text.strip())
+    ask(uid,"🎨 ဝါသနာ (ဥပမာ ခရီးသွား, ဂီတ)? (/skip)-")
+    bot.register_next_step_handler(m, s_hobby)
 
-def reg_hobby(m):
+@_step
+def s_hobby(m):
     uid = m.chat.id
-    if m.text and m.text.strip() != '/skip': user_reg.setdefault(uid,{})['hobby'] = m.text.strip()
-    next_step(m, reg_job, "💼 အလုပ်? `(/skip)`-")
+    if m.text and m.text != '/skip': reg_set(uid,'hobby',m.text.strip())
+    ask(uid,"💼 အလုပ်? (/skip)-")
+    bot.register_next_step_handler(m, s_job)
 
-def reg_job(m):
+@_step
+def s_job(m):
     uid = m.chat.id
-    if m.text and m.text.strip() != '/skip': user_reg.setdefault(uid,{})['job'] = m.text.strip()
-    next_step(m, reg_song, "🎵 အကြိုက်ဆုံး သီချင်း? `(/skip)`-")
+    if m.text and m.text != '/skip': reg_set(uid,'job',m.text.strip())
+    ask(uid,"🎵 အကြိုက်ဆုံး သီချင်း? (/skip)-")
+    bot.register_next_step_handler(m, s_song)
 
-def reg_song(m):
-    uid = m.chat.id    if m.text and m.text.strip() != '/skip': user_reg.setdefault(uid,{})['song'] = m.text.strip()
-    next_step(m, reg_bio, "📝 *မိမိအကြောင်း အတိုချုံး* `(/skip)`-\n_(ဥပမာ: ဆေးကျောင်းသား, ဂီတကိုနှစ်သက်သူ)_")
-
-def reg_bio(m):
+@_step
+def s_song(m):
     uid = m.chat.id
-    if m.text and m.text.strip() != '/skip': user_reg.setdefault(uid,{})['bio'] = m.text.strip()
+    if m.text and m.text != '/skip': reg_set(uid,'song',m.text.strip())
+    ask(uid,
+        "📝 *မိမိအကြောင်း အတိုချုံး* (/skip)-\n"
+        "_(ဥပမာ: ဆေးကျောင်းသား, ဂီတကိုနှစ်သက်သူ)_")
+    bot.register_next_step_handler(m, s_bio)
+
+@_step
+def s_bio(m):
+    uid = m.chat.id
+    if m.text and m.text != '/skip': reg_set(uid,'bio',m.text.strip())
     mk = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
     mk.row('💑 ဖူးစာရှာနေသူ','🤝 မိတ်ဆွေဖွဲ့ချင်သူ')
     mk.add('/skip')
-    next_step(m, reg_ltype, "🎯 ဘာရှာနေပါသလဲ?", mk)
+    bot.send_message(uid,"🎯 ဘာရှာနေပါသလဲ?", reply_markup=mk)
+    bot.register_next_step_handler(m, s_ltype)
 
-def reg_ltype(m):
+@_step
+def s_ltype(m):
     uid = m.chat.id
-    if m.text and m.text.strip() != '/skip': user_reg.setdefault(uid,{})['looking_type'] = m.text.strip()
+    if m.text and m.text != '/skip': reg_set(uid,'looking_type',m.text.strip())
     mk = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
     mk.add('Male','Female','/skip')
-    next_step(m, reg_gender, "⚧ သင့်လိင်?", mk)
+    bot.send_message(uid,"⚧ သင့်လိင်?", reply_markup=mk)
+    bot.register_next_step_handler(m, s_gender)
 
-def reg_gender(m):
+@_step
+def s_gender(m):
     uid = m.chat.id
-    if m.text and m.text.strip() != '/skip': user_reg.setdefault(uid,{})['gender'] = m.text.strip()
+    if m.text and m.text != '/skip': reg_set(uid,'gender',m.text.strip())
     mk = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
     mk.add('Male','Female','Both','/skip')
-    next_step(m, reg_lgender, "💑 ရှာဖွေနေတဲ့ လိင်?", mk)
+    bot.send_message(uid,"💑 ရှာဖွေနေတဲ့ လိင်?", reply_markup=mk)
+    bot.register_next_step_handler(m, s_lgender)
 
-def reg_lgender(m):
+@_step
+def s_lgender(m):
     uid = m.chat.id
-    if m.text and m.text.strip() != '/skip': user_reg.setdefault(uid,{})['looking_gender'] = m.text.strip()
+    if m.text and m.text != '/skip': reg_set(uid,'looking_gender',m.text.strip())
     mk = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-    mk.add(*ZODIACS)
+    for z in ZODIACS: mk.add(z)
     mk.add('Any','/skip')
-    next_step(m, reg_lzodiac, "🔮 ရှာဖွေနေတဲ့ ရာသီ?", mk)
+    bot.send_message(uid,"🔮 ရှာဖွေနေတဲ့ ရာသီ?", reply_markup=mk)
+    bot.register_next_step_handler(m, s_lzodiac)
 
-def reg_lzodiac(m):
+@_step
+def s_lzodiac(m):
     uid = m.chat.id
-    if m.text and m.text.strip() != '/skip': user_reg.setdefault(uid,{})['looking_zodiac'] = m.text.strip()
-    next_step(m, reg_photo, "📸 Profile ာတ်ပုံ ပေးပို့ပါ _(မလိုပါက `/skip`)_")
+    if m.text and m.text != '/skip': reg_set(uid,'looking_zodiac',m.text.strip())
+    bot.send_message(uid,
+        "📸 Profile ဓာတ်ပုံ ပေးပို့ပါ\n_(မလိုပါက /skip)_",
+        parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+    bot.register_next_step_handler(m, s_photo)
 
-def reg_photo(m):
-    uid = m.chat.id
-    if m.content_type == 'photo':
-        user_reg.setdefault(uid,{})['photo'] = m.photo[-1].file_id
-    try:
-        save_user(uid, user_reg.pop(uid, {}))
-        bot.send_message(uid, "✅ Profile တည်ဆောက် ပြီးပါပြီ! 🎉\n\nခလုတ်များ နှိပ်ပြီး အသုံးပြုနိုင်ပါပြီ 👇", parse_mode="Markdown", reply_markup=main_kb())
-    except Exception as e:
-        print(f"Save error: {e}")
-        bot.send_message(uid, "⚠️ Error ဖြစ်သွားပါသည်။ /start ထပ်နှိပ်ပါ")
+@_step
+def s_photo(m):
+    uid    = m.chat.id
+    is_new = db_get(uid) is None
 
-# ═══════════════════════════════════════════════════════════════# 👤  PROFILE & 🔍  MATCH
-# ═══════════════════════════════════════════════════════════════
-def fmt_profile(u):
-    if not u: return "Profile မရှိပါ"
-    return (f"📛 *နာမည်*: {safe(u, 'name')}\n🎂 *အသက်*: {safe(u, 'age')} | 🔮 *ရာသီ*: {safe(u, 'zodiac')}\n"
-            f"📍 *မြို့*: {safe(u, 'city')} | 💼 *အလုပ်*: {safe(u, 'job')}\n🎵 *သီချင်း*: {safe(u, 'song')}\n"
-            f"📝 *Bio*: {safe(u, 'bio')}\n⚧ *လိင်*: {safe(u, 'gender')} | 💑 *ရှာဖွေ*: {safe(u, 'looking_gender')}")
-
-@bot.message_handler(func=lambda m: m.text == "👤 ကိုယ့်ပရိုဖိုင်")
-def show_profile(m):
-    uid = m.chat.id
-    user = get_user(uid)
-    if not user:
-        bot.send_message(uid, "Profile မရှိသေးပါ။ /start ကိုနှိပ်ပါ။", reply_markup=main_kb()); return
-    refs = get_ref_count(uid)
-    stars = safe(user, 'stars', '0')
-    # Fixed bracket here
-    unlock_status = ' ✅ Unlock ပြီး' if is_unlocked(uid) else f' 🔒 ({SHARE_NEEDED-refs} ကျန်)'
-    text = fmt_profile(user) + f"\n\n⭐ ကြယ်ပွင့်: {stars} ခု\n ဖိတ်ကြားမှု: {refs}/{SHARE_NEEDED}{unlock_status}"
-    kb = InlineKeyboardMarkup()
-    kb.row(InlineKeyboardButton("🔄 ပြန်လုပ်မည်", callback_data="reset_profile"), InlineKeyboardButton("🔗 Invite Link", callback_data="my_invite"))
-    if user.get('photo'):
-        try: bot.send_photo(uid, user['photo'], caption=text, parse_mode="Markdown", reply_markup=kb)
-        except: bot.send_message(uid, text, parse_mode="Markdown", reply_markup=kb)
+    if m.text == '/skip':
+        old = db_get(uid)
+        if old and old.get('photo'):
+            reg_set(uid,'photo', old['photo'])
+    elif m.content_type == 'photo':
+        reg_set(uid,'photo', m.photo[-1].file_id)
     else:
-        bot.send_message(uid, text, parse_mode="Markdown", reply_markup=kb)
-
-@bot.message_handler(func=lambda m: m.text == "🔍 ဖူးစာရှာမည်")
-def find_match(m):
-    uid = m.chat.id
-    user = get_user(uid)
-    if not user:
-        bot.send_message(uid, "/start ကိုနှိပ်ပြီး Profile ဦးတည်ဆောက်ပါ။", reply_markup=main_kb()); return
-    # ✅ UNLOCK CHECK REMOVED FROM HERE
-    
-    r = execute_query("SELECT seen_id FROM seen WHERE user_id=?", (uid,))
-    seen = [row[0] for row in r] if r else []
-    seen.append(uid)
-    r = execute_query("SELECT reported_id FROM reports WHERE reporter_id=?", (uid,))
-    reported = [row[0] for row in r] if r else []
-    excl = list(set(seen + reported))
-    lg = safe(user, 'looking_gender', '')
-    lz = safe(user, 'looking_zodiac', '')
-    filters = [f"user_id NOT IN ({','.join(['?']*len(excl))})"] if excl else ["1=1"]
-    params = excl[:]
-    if lg and lg not in ('Both', 'Any'):
-        filters.append("(gender=? OR gender IS NULL)")
-        params.append(lg)
-    order = f"CASE WHEN zodiac='{lz}' THEN 0 ELSE 1 END, stars DESC, RANDOM()" if lz and lz not in ('Any','') else "stars DESC, RANDOM()"
-    query = f"SELECT * FROM users WHERE {' AND '.join(filters)} ORDER BY {order} LIMIT 1"    r = execute_query(query, params)
-    p_row = r.fetchone() if r else None
-    if not p_row:
-        if len(seen) > 1:
-            execute_query("DELETE FROM seen WHERE user_id=?", (uid,), commit=True)
-            bot.send_message(uid, "🔄 ကြည့်ပြီးသားများ ကုန်သဖြင့် ပြန်စပါပြီ...")
-            find_match(m)
-        else:
-            bot.send_message(uid, "😔 ကိုက်ညီသူ မရှိသေးပါ။", reply_markup=main_kb())
+        ask(uid,"⚠️ ဓာတ်ပုံသာ ပေးပို့ပါ  (သို့)  /skip ဟုရိုက်ပါ-")
+        bot.register_next_step_handler(m, s_photo)
         return
-    p = dict(p_row)
-    execute_query("INSERT OR IGNORE INTO seen VALUES(?,?)", (uid, p['user_id']), commit=True)
-    note = f"\n_({lz} မတွေ့သောကြောင့် အနီးစပ်ဆုံးပြပေးနေပါသည်)_" if lz and lz not in ('Any','') and safe(p,'zodiac','') != lz else ''
-    text = fmt_profile(p) + note
-    kb = InlineKeyboardMarkup()
-    kb.row(InlineKeyboardButton("❤️ Like", callback_data=f"like_{p['user_id']}"), InlineKeyboardButton("⏭ Skip", callback_data="skip_match"), InlineKeyboardButton("🚩 Report", callback_data=f"report_{p['user_id']}"))
-    if p.get('photo'):
-        try: bot.send_photo(uid, p['photo'], caption=text, parse_mode="Markdown", reply_markup=kb)
-        except: bot.send_message(uid, text, parse_mode="Markdown", reply_markup=kb)
-    else:
-        bot.send_message(uid, text, parse_mode="Markdown", reply_markup=kb)
 
-# ═══════════════════════════════════════════════════════════════
-# 🔘  CALLBACKS (Match Logic & Unlock Gate)
-# ═══════════════════════════════════════════════════════════════
-@bot.callback_query_handler(func=lambda c: True)
-def on_cb(c):
-    uid = c.message.chat.id
-    data = c.data
+    data = _reg.pop(uid, {})
+    db_save(uid, data)
+
+    bot.send_message(uid,
+        f"✅ Profile {'တည်ဆောက်' if is_new else 'ပြင်ဆင်'} ပြီးပါပြီ! 🎉\n\n"
+        f"ခလုတ်များ နှိပ်ပြီး အသုံးပြုနိုင်ပါပြီ 👇",
+        parse_mode="Markdown", reply_markup=kb(uid))
+
+    if is_new:
+        notify_admin(
+            f"🎉 *မှတ်ပုံတင် ပြီးမြောက်!*\n🆔 `{uid}` — {sf(data,'name')}\n"
+            f"👥 {db_count()} ယောက်\n⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
+# ═══════════════════════════════════════
+# /start
+# ═══════════════════════════════════════
+@bot.message_handler(commands=['start'])
+def cmd_start(message):
+    uid  = message.chat.id
+    args = message.text.split()
+
+    # ★ CRITICAL: clear any pending step handlers first
+    clear_reg(uid)
+
+    # referral
     try:
-        if data == "my_invite":
-            link = f"https://t.me/{BOT_USERNAME}?start=ref_{uid}"
-            refs = get_ref_count(uid)
-            kb = InlineKeyboardMarkup()
-            kb.row(InlineKeyboardButton("📤 Share လုပ်မည်", url=f"https://t.me/share/url?url={link}&text=✨+Yay+Zat+Bot+မှာ+ဖူးစာရှာနိုင်ပါတယ်+💖"))
-            bot.send_message(uid, f"🔗 *Invite Link*\n\n`{link}`\n\n👥 Join ဖြစ်သူ: *{refs}/{SHARE_NEEDED}*\n{'✅ Unlock ပြီး' if is_unlocked(uid) else f'🔒 {SHARE_NEEDED-refs} ကျန်'}", parse_mode="Markdown", reply_markup=kb)
-
-        elif data == "reset_profile":
-            try: bot.delete_message(uid, c.message.message_id)
-            except: pass
-            user_reg[uid] = {}
-            bot.send_message(uid, "🔄 Profile ပြန်လုပ်မည်\n\n📛 နာမည် -", reply_markup=ReplyKeyboardRemove())
-            bot.register_next_step_handler(c.message, reg_name)
-
-        elif data == "skip_match":
-            try: bot.delete_message(uid, c.message.message_id)
-            except: pass
-            find_match(c.message)
-
-        elif data.startswith("like_"):            tid = int(data[5:])
-            try: bot.delete_message(uid, c.message.message_id)
-            except: pass
-            me = get_user(uid)
-            if not me: return
-            kb = InlineKeyboardMarkup()
-            kb.row(InlineKeyboardButton("✅ လက်ခံမည်", callback_data=f"accept_{uid}"), InlineKeyboardButton("❌ ငြင်းမည်", callback_data="decline"))
-            cap = f"💌 *'{safe(me,'name','တစ်ယောက်')}'* က သင့်ကို Like လုပ်ထားပါတယ်!\n\n" + fmt_profile(me)
-            try:
-                if me.get('photo'): bot.send_photo(tid, me['photo'], caption=cap, parse_mode="Markdown", reply_markup=kb)
-                else: bot.send_message(tid, cap, parse_mode="Markdown", reply_markup=kb)
-                bot.send_message(uid, "❤️ Like ပို့လိုက်ပါပြီ! တစ်ဖက်က လက်ခံရင် အကြောင်းကြားပေးပါမယ် 😊", reply_markup=main_kb())
-            except: bot.send_message(uid, "⚠️ တစ်ဖက်လူက Bot Block ထားလို့ မပို့နိုင်ပါ။", reply_markup=main_kb())
-
-        elif data.startswith("accept_"):
-            liker_id = int(data[7:])
-            try: bot.delete_message(uid, c.message.message_id)
-            except: pass
-            liker = get_user(liker_id)
-            me = get_user(uid)
-
-            def deliver_match(to_uid, partner_uid, partner_name):
-                if is_unlocked(to_uid):
-                    try: bot.send_message(to_uid, f"💖 *Match ဖြစ်သွားပါပြီ!*\n\n[ဒီမှာနှိပ်ပြီး](tg://user?id={partner_uid}) {partner_name} နဲ့ စကားပြောနိုင်ပါပြီ 🎉\n\n✅ သင် Unlock ဖြစ်ပြီးပါပြီ", parse_mode="Markdown", reply_markup=main_kb())
-                    except: pass
-                else:
-                    link = f"https://t.me/{BOT_USERNAME}?start=ref_{to_uid}"
-                    kb = InlineKeyboardMarkup()
-                    kb.row(InlineKeyboardButton("📤 Share လုပ်မည်", url=f"https://t.me/share/url?url={link}&text=✨+Yay+Zat+Bot+မှာ+ဖူးစာရှာနိုင်ပါတယ်+💖"))
-                    kb.row(InlineKeyboardButton("✅ စစ်ဆေးမည်", callback_data="check_unlock"))
-                    execute_query("INSERT OR REPLACE INTO pending_match VALUES(?,?,datetime('now'))", (to_uid, partner_uid), commit=True)
-                    try: bot.send_message(to_uid, f"💖 *Match ဖြစ်သွားပါပြီ!*\n\n🔒 *ဖူးစာရှင်ရဲ့ Link ကိုရဖို့ Unlock လုပ်ပါ*\n\nမိတ်ဆွေ *{SHARE_NEEDED}* ယောက် Bot ကိုသုံးစေပြီးမှ Link ရပါမည် 🙏\n\n📊 ဖိတ်ပြီး Join ဖြစ်သူ: *{get_ref_count(to_uid)}/{SHARE_NEEDED}*\n🎯 ကျန်: *{SHARE_NEEDED - get_ref_count(to_uid)}* ယောက်\n\n🔗 `{link}`\n\nLink ကို Share လုပ်ပြီး စစ်ဆေးပေးပါ 👇", parse_mode="Markdown", disable_web_page_preview=True, reply_markup=kb)
-                    except: pass
-
-            deliver_match(uid, liker_id, safe(liker,'name','ဖူးစာရှင်'))
-            deliver_match(liker_id, uid, safe(me,'name','ဖူးစာရှင်'))
-            bot.answer_callback_query(c.id, "🎉 လက်ခံလိုက်ပါပြီ!")
-
-        elif data == "decline":
-            try: bot.delete_message(uid, c.message.message_id)
-            except: pass
-            bot.send_message(uid, "❌ ငြင်းဆန်လိုက်ပါပြီ။", reply_markup=main_kb())
-
-        elif data == "check_unlock":
-            refs = get_ref_count(uid)
-            if refs >= SHARE_NEEDED:
-                bot.answer_callback_query(c.id, f"🎉 {refs} ယောက်ပြည့်ပါပြီ! Unlock ဖြစ်ပါပြီ!", show_alert=True)
-                r = execute_query("SELECT partner_id FROM pending_match WHERE user_id=?", (uid,))
-                row = r.fetchone() if r else None
-                if row:                    pid = row[0]
-                    execute_query("DELETE FROM pending_match WHERE user_id=?", (uid,), commit=True)
-                    try: bot.send_message(uid, f"✅ *Unlock ဖြစ်သွားပါပြီ!*\n\n[ဒီမှာနှိပ်ပြီး](tg://user?id={pid}) ဖူးစာရှင်နဲ့ စကားပြောနိုင်ပါပြီ 🎉", parse_mode="Markdown", reply_markup=main_kb())
-                    except: pass
-                try: bot.delete_message(uid, c.message.message_id)
-                except: pass
-            else:
-                bot.answer_callback_query(c.id, f"⚠️ ကျန်သေးသည် {SHARE_NEEDED - refs} ယောက်။ ဆက်ဖိတ်ကြားပါ!", show_alert=True)
-
-        elif data.startswith("report_"):
-            tid = int(data[7:])
-            execute_query("INSERT OR IGNORE INTO reports VALUES(?,?)", (uid, tid), commit=True)
-            bot.answer_callback_query(c.id, "🚩 Report လုပ်ပြီး", show_alert=True)
-            try: bot.delete_message(uid, c.message.message_id)
-            except: pass
-            bot.send_message(uid, "✅ Report လုပ်ပြီးပါပြီ", reply_markup=main_kb())
-
+        if len(args) > 1 and args[1].startswith('ref_'):
+            referrer = int(args[1][4:])
+            if referrer != uid and db_get(referrer) and not db_get(uid):
+                db_ref_add(referrer, uid)
+                if db_is_unlocked(referrer):
+                    pid = pm_get(referrer)
+                    if pid:
+                        pm_clear(referrer)
+                        try_deliver_match(referrer, pid)
     except Exception as e:
-        print(f"Callback error: {e}")
+        err_notify('start/ref', e, uid)
 
-# ═══════════════════════════════════════════════════════════════
-# 🔁  MENU & POLLING
-# ═══════════════════════════════════════════════════════════════
-@bot.message_handler(func=lambda m: m.text == "🔄 Profile ပြန်လုပ်")
+    if db_get(uid):
+        bot.send_message(uid,
+            "✨ *ကြိုဆိုပါတယ်!* ✨\n\nခလုတ်များနှိပ်ပြီး အသုံးပြုနိုင်ပါပြီ 👇",
+            parse_mode="Markdown", reply_markup=kb(uid))
+        return
+
+    try:
+        tg = message.from_user.username or str(uid)
+        fn = message.from_user.first_name or ''
+        ln = message.from_user.last_name  or ''
+    except: tg = fn = ln = str(uid)
+
+    notify_admin(
+        f"🆕 *User သစ်*\n👤 {fn} {ln} @{tg}\n🆔 `{uid}`\n"
+        f"👥 {db_count()} ယောက်\n⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    )
+
+    _reg[uid] = {}
+    bot.send_message(uid,
+        "✨ *Yay Zat Zodiac မှ ကြိုဆိုပါတယ်!* ✨\n\n"
+        "ဖူးစာရှင်/မိတ်ဆွေကို ရှာဖွေဖို့ မေးခွန်းလေးတွေ ဖြေပေးပါ 🙏\n"
+        "_(/skip ရိုက်ပြီး ကျော်နိုင်ပါသည်)_\n\n"
+        "📛 *နာမည် (သို့) အမည်ဝှက်* ကို ရိုက်ထည့်ပါ-",
+        parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+    bot.register_next_step_handler(message, s_name)
+
+# ═══════════════════════════════════════
+# MY PROFILE
+# ═══════════════════════════════════════
+def show_profile(message):
+    uid = message.chat.id
+    tp  = db_get(uid)
+    if not tp:
+        bot.send_message(uid,"Profile မရှိသေးပါ။ /start ကိုနှိပ်ပါ。",
+                         reply_markup=kb(uid)); return
+
+    stars = tp.get('stars') or 0
+    refs  = db_ref_count(uid)
+    lock  = "✅ Unlock ပြီး" if db_is_unlocked(uid) else f"🔒 {refs}/{SHARE_NEEDED} ({SHARE_NEEDED-refs} ကျန်)"
+    text  = (fmt(tp) +
+             f"\n\n⭐ ကြယ်ပွင့်   : {stars_str(stars)} ({stars} ခု)\n"
+             f"🔗 ဖိတ်ကြားမှု : {lock}")
+
+    m = InlineKeyboardMarkup()
+    m.row(InlineKeyboardButton("📛 နာမည်",  callback_data="e_name"),
+          InlineKeyboardButton("🎂 အသက်",   callback_data="e_age"))
+    m.row(InlineKeyboardButton("🔮 ရာသီ",   callback_data="e_zodiac"),
+          InlineKeyboardButton("📍 မြို့",   callback_data="e_city"))
+    m.row(InlineKeyboardButton("🎨 ဝါသနာ", callback_data="e_hobby"),
+          InlineKeyboardButton("💼 အလုပ်",  callback_data="e_job"))
+    m.row(InlineKeyboardButton("🎵 သီချင်း",callback_data="e_song"),
+          InlineKeyboardButton("📝 Bio",    callback_data="e_bio"))
+    m.row(InlineKeyboardButton("📸 ဓာတ်ပုံ",callback_data="e_photo"))
+    m.row(InlineKeyboardButton("🔗 Invite Link", callback_data="my_invite"))
+    m.row(InlineKeyboardButton("🔄 Profile ပြန်လုပ်", callback_data="do_reset"),
+          InlineKeyboardButton("🗑 Profile ဖျက်",     callback_data="do_delete"))
+
+    if tp.get('photo'):
+        try:
+            bot.send_photo(uid, tp['photo'], caption=text,
+                           reply_markup=m, parse_mode="Markdown")
+            return
+        except Exception as e:
+            err_notify('show_profile/photo', e, uid)
+    bot.send_message(uid, text, reply_markup=m, parse_mode="Markdown")
+
+# ═══════════════════════════════════════
+# FIND MATCH
+# ═══════════════════════════════════════
+def find_match(message):
+    uid = message.chat.id
+    me  = db_get(uid)
+    if not me:
+        bot.send_message(uid,"/start ကိုနှိပ်ပြီး Profile ဦးတည်ဆောက်ပါ。",
+                         reply_markup=kb(uid)); return
+
+    if not db_is_unlocked(uid):
+        share_gate(uid); return
+
+    if not check_ch(uid):
+        mk = InlineKeyboardMarkup()
+        mk.add(InlineKeyboardButton("📢 Channel Join မည်",url=CHANNEL_LINK))
+        bot.send_message(uid,"⚠️ Channel ကို အရင် Join ပေးပါ。",reply_markup=mk); return
+
+    seen  = db_seen_get(uid)
+    rptd  = db_reported_by(uid)
+    excl  = seen | rptd | {uid}
+    lg    = (me.get('looking_gender') or '').strip()
+    lz    = (me.get('looking_zodiac')  or '').strip()
+
+    pool = [u for u in db_all()
+            if u['user_id'] not in excl
+            and (not lg or lg in ('Both','Any')
+                 or (u.get('gender') or '').strip() == lg)]
+
+    if not pool:
+        if seen:
+            db_seen_clear(uid)
+            bot.send_message(uid,"🔄 ကြည့်ပြီးသားများ ကုန်သဖြင့် ပြန်စပါပြီ...")
+            find_match(message)
+        else:
+            bot.send_message(uid,
+                "😔 သင့်အတွက် ကိုက်ညီသူ မရှိသေးပါ。\n"
+                "ဖော်ဆွေများကို ဖိတ်ကြားပါ 😊",reply_markup=kb(uid))
+        return
+
+    def sort_key(u):
+        zm = 0 if (lz and lz not in ('Any','') and (u.get('zodiac') or '')==lz) else 1
+        st = -(u.get('stars') or 0)
+        return (zm, st)
+
+    pool.sort(key=sort_key)
+    tgt = pool[0]
+    tid = tgt['user_id']
+    db_seen_add(uid, tid)
+
+    note = ''
+    if lz and lz not in ('Any','') and (tgt.get('zodiac') or '') != lz:
+        note = f"\n_({lz} မတွေ့သောကြောင့် အနီးစပ်ဆုံးပြပေးနေပါသည်)_"
+
+    text = fmt(tgt, title=f"🎯 *မိတ်ဆွေနဲ့ ကိုက်ညီနိုင်မယ့်သူ*{note}")
+    mk = InlineKeyboardMarkup()
+    mk.row(InlineKeyboardButton("❤️ Like",   callback_data=f"like_{tid}"),
+           InlineKeyboardButton("⏭ Skip",   callback_data="skip"),
+           InlineKeyboardButton("🚩 Report", callback_data=f"rpt_{tid}"))
+
+    if tgt.get('photo'):
+        try:
+            bot.send_photo(uid, tgt['photo'], caption=text,
+                           reply_markup=mk, parse_mode="Markdown")
+            return
+        except Exception as e:
+            err_notify('find_match/photo', e, uid)
+    bot.send_message(uid, text, reply_markup=mk, parse_mode="Markdown")
+
+# ═══════════════════════════════════════
+# OTHER HANDLERS
+# ═══════════════════════════════════════
+def do_reset(message):
+    uid = message.chat.id
+    clear_reg(uid)
+    old = db_get(uid)
+    _reg[uid] = dict(old) if old else {}
+    bot.send_message(uid,
+        "🔄 *Profile ပြန်လုပ်မည်*\n\n"
+        "/skip — ကျော်နိုင်ပါသည် (ဟောင်းတန်ဖိုးများ ထိန်းသိမ်းမည်)\n\n"
+        "📛 နာမည်-",
+        parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+    bot.register_next_step_handler(message, s_name)
+
+def show_help(message):
+    bot.send_message(message.chat.id,
+        "ℹ️ *Yay Zat Bot — အကူအညီ*\n\n"
+        "🔍 *ဖူးစာရှာမည်* — ကိုက်ညီနိုင်မယ့်သူ ရှာပါ\n"
+        "👤 *ကိုယ့်ပရိုဖိုင်* — Profile ကြည့်/ပြင်ပါ\n"
+        "🔄 *Profile ပြန်လုပ်* — Profile ပြန်ဖြည့်ပါ\n\n"
+        "⚠️ ပြဿနာများ Admin ထံ ဆက်သွယ်ပါ。",
+        parse_mode="Markdown", reply_markup=kb(message.chat.id))
+
+def show_stats(message):
+    uid = message.chat.id
+    if uid != ADMIN_ID:
+        bot.send_message(uid,"⛔ Admin သာ ကြည့်ရှုနိုင်ပါသည်。"); return
+    s = db_stats()
+    bot.send_message(ADMIN_ID,
+        f"📊 *Admin Stats*\n\n"
+        f"👥 စုစုပေါင်း   : *{s['total']}* ယောက်\n"
+        f"♂️ ကျား        : {s['male']}\n"
+        f"♀️ မ           : {s['female']}\n"
+        f"📸 ဓာတ်ပုံပါ   : {s['photo']}\n"
+        f"🔓 Unlock ပြီး : {s['unlocked']}\n"
+        f"🔗 Referral    : {s['refs']}\n"
+        f"⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+        parse_mode="Markdown", reply_markup=admin_kb())
+
+def show_admin(message):
+    if message.chat.id != ADMIN_ID: return
+    m = InlineKeyboardMarkup()
+    m.row(InlineKeyboardButton("📊 Stats",     callback_data="adm_stats"),
+          InlineKeyboardButton("👥 Users",      callback_data="adm_users"))
+    m.row(InlineKeyboardButton("📢 Broadcast",  callback_data="adm_bcast"),
+          InlineKeyboardButton("🗑 User ဖျက်", callback_data="adm_del"))
+    m.row(InlineKeyboardButton("🔓 Manual Unlock", callback_data="adm_unlock"))
+    bot.send_message(ADMIN_ID,"🛠 *Admin Panel*",parse_mode="Markdown",reply_markup=m)
+
+def _bcast(m):
+    if is_cmd(m.text): bot.send_message(ADMIN_ID,"ပယ်ဖျက်ပြီး。"); return
+    ok=fail=0
+    for uid in db_ids():
+        try: bot.send_message(uid,f"📢 *Admin မှ*\n\n{m.text}",
+                              parse_mode="Markdown"); ok+=1
+        except: fail+=1
+    bot.send_message(ADMIN_ID,f"✅ {ok} ရောက် / ❌ {fail} မရောက်")
+
+def _del_u(m):
+    if is_cmd(m.text): bot.send_message(ADMIN_ID,"ပယ်ဖျက်ပြီး。"); return
+    try:
+        uid = int(m.text.strip())
+        if db_get(uid): db_delete(uid); bot.send_message(ADMIN_ID,f"✅ `{uid}` ဖျက်ပြီး",parse_mode="Markdown")
+        else: bot.send_message(ADMIN_ID,"⚠️ မတွေ့ပါ。")
+    except: bot.send_message(ADMIN_ID,"⚠️ ID ဂဏန်းသာ。")
+
+def _unlock_u(m):
+    if is_cmd(m.text): bot.send_message(ADMIN_ID,"ပယ်ဖျက်ပြီး。"); return
+    try:
+        uid = int(m.text.strip())
+        if db_get(uid):
+            for i in range(SHARE_NEEDED):
+                xq('INSERT OR IGNORE INTO referrals(referrer_id,referred_id) VALUES(?,?)',
+                   (uid, -(i+1)))
+            xq('UPDATE users SET stars=stars+? WHERE user_id=?',(SHARE_NEEDED,uid))
+            bot.send_message(ADMIN_ID,f"✅ `{uid}` unlock ပြီး",parse_mode="Markdown")
+            try: bot.send_message(uid,
+                "✅ Admin က unlock လုပ်ပေးပြီးပါပြီ!\n🔍 ဖူးစာရှာနိုင်ပါပြီ 💖",
+                reply_markup=kb(uid))
+            except: pass
+            # check pending
+            pid = pm_get(uid)
+            if pid:
+                pm_clear(uid)
+                try_deliver_match(uid, pid)
+        else: bot.send_message(ADMIN_ID,"⚠️ မတွေ့ပါ。")
+    except: bot.send_message(ADMIN_ID,"⚠️ ID ဂဏန်းသာ。")
+
+def save_edit(message, field):
+    uid = message.chat.id
+    if is_cmd(message.text) and message.text != '/skip':
+        bot.send_message(uid,"⚠️ ပြင်ဆင်မှု ရပ်တန့်ပြီးပါပြီ。",reply_markup=kb(uid)); return
+    try:
+        if field == 'photo':
+            if message.content_type != 'photo':
+                bot.send_message(uid,"⚠️ ဓာတ်ပုံသာ ပေးပို့ပါ。"); return
+            db_update(uid,'photo',message.photo[-1].file_id)
+        else:
+            if not message.text or not message.text.strip() or message.text=='/skip':
+                bot.send_message(uid,"✅ ပြောင်းလဲမှု မလုပ်ဘဲ ထိန်းသိမ်းပြီး。",reply_markup=kb(uid)); return
+            db_update(uid, field, message.text.strip())
+        bot.send_message(uid,"✅ ပြင်ဆင်မှု အောင်မြင်!",reply_markup=kb(uid))
+    except Exception as e:
+        err_notify(f'save_edit/{field}',e,uid)
+        bot.send_message(uid,"⚠️ မှားသွားပါသည်。ထပ်ကြိုးစားပါ。")
+
+# ═══════════════════════════════════════
+# MENU ROUTER
+# ═══════════════════════════════════════
+MENU = {
+    "🔍 ဖူးစာရှာမည်"     : find_match,
+    "👤 ကိုယ့်ပရိုဖိုင်"  : show_profile,
+    "ℹ️ အကူအညီ"          : show_help,
+    "🔄 Profile ပြန်လုပ်"  : lambda m: ask_reset(m),
+    "📊 စာရင်းအင်း"       : show_stats,
+    "🛠 Admin Panel"       : show_admin,
+}
+
+def ask_reset(message):
+    uid = message.chat.id
+    m = InlineKeyboardMarkup()
+    m.row(InlineKeyboardButton("✅ ဟုတ်ကဲ့ ပြန်လုပ်မည်", callback_data="reset_go"),
+          InlineKeyboardButton("❌ မလုပ်တော့ပါ",          callback_data="reset_no"))
+    bot.send_message(uid,
+        "⚠️ Profile ကို ပြန်လုပ်မှာ သေချာပါသလား?\n"
+        "_(/skip ကျော်ပြီး ဟောင်းတန်ဖိုးများ ထိန်းသိမ်းနိုင်ပါသည်)_",
+        parse_mode="Markdown", reply_markup=m)
+
+@bot.message_handler(func=lambda m: m.text in MENU)
+def menu_router(message):
+    clear_reg(message.chat.id)   # clear any stale step handlers
+    try: MENU[message.text](message)
+    except Exception as e:
+        err_notify(f'menu/{message.text}',e,message.chat.id)
+        bot.send_message(message.chat.id,"⚠️ မှားသွားပါသည်。နောက်မှ ထပ်ကြိုးစားပါ。")
+
+@bot.message_handler(commands=['reset'])
 def cmd_reset(m):
-    kb = InlineKeyboardMarkup()
-    kb.row(InlineKeyboardButton("✅ ဟုတ်ကဲ့", callback_data="reset_profile"), InlineKeyboardButton("❌ မဟုတ်ပါ", callback_data="cancel_cb"))
-    bot.send_message(m.chat.id, "⚠️ Profile ကို ပြန်လုပ်မှာ သေချာပါသလား?\n_(ဟောင်းသွားပါမည်)_", parse_mode="Markdown", reply_markup=kb)
+    clear_reg(m.chat.id)
+    ask_reset(m)
 
-@bot.message_handler(func=lambda m: m.text == "ℹ️ အကူအညီ")
-def show_help(m):
-    bot.send_message(m.chat.id, "ℹ️ *Yay Zat Bot — အကူအညီ*\n\n🔍 *ဖူးစာရှာမည်* — ကိုက်ညီသူရှာပါ\n👤 *ကိုယ့်ပရိုဖိုင်* — Profile ကြည့်/ပြင်ပါ\n🔄 *Profile ပြန်လုပ်* — Profile အသစ်စမည်\n\n*Unlock လုပ်နည်း*\nMatch ဖြစ်ရင် Link ရဖို့ မိတ်ဆွေများ ဖိတ်ပါ\n7 ဦးပြည့်ရင် အလိုအလျောက် Unlock ဖြစ်ပါမယ်", parse_mode="Markdown", reply_markup=main_kb())
+@bot.message_handler(commands=['myprofile'])
+def cmd_profile(m): show_profile(m)
 
-@bot.callback_query_handler(func=lambda c: c.data == "cancel_cb")
-def cancel_cb(c):
-    try: bot.delete_message(c.message.chat.id, c.message.message_id)
+@bot.message_handler(commands=['stats'])
+def cmd_stats(m): show_stats(m)
+
+@bot.message_handler(commands=['deleteprofile'])
+def cmd_del(message):
+    uid = message.chat.id
+    m = InlineKeyboardMarkup()
+    m.row(InlineKeyboardButton("✅ ဟုတ်ကဲ့ ဖျက်မည်", callback_data="do_delete"),
+          InlineKeyboardButton("❌ မဖျက်တော့ပါ",      callback_data="del_no"))
+    bot.send_message(uid,"⚠️ Profile ဖျက်မှာ သေချာပါသလား?",reply_markup=m)
+
+# ═══════════════════════════════════════
+# CALLBACK HANDLER
+# ═══════════════════════════════════════
+EDIT_LABELS = {
+    'name':'နာမည်','age':'အသက်','zodiac':'ရာသီ','city':'မြို့',
+    'hobby':'ဝါသနာ','job':'အလုပ်','song':'သီချင်း','bio':'Bio',
+    'looking_type':'ရှာဖွေမည့်အမျိုးအစား',
+    'gender':'လိင်','looking_gender':'ရှာဖွေမည့်လိင်',
+    'looking_zodiac':'ရှာဖွေမည့်ရာသီ'
+}
+
+@bot.callback_query_handler(func=lambda c: True)
+def on_cb(call):
+    uid = call.message.chat.id
+    d   = call.data
+    try:
+        _handle(call, uid, d)
+    except Exception as e:
+        err_notify(f'cb/{d}',e,uid)
+        try: bot.answer_callback_query(call.id,"⚠️ မှားသွားပါသည်。",show_alert=True)
+        except: pass
+
+def _handle(call, uid, d):
+
+    # share check
+    if d == "chk_share":
+        cnt = db_ref_count(uid)
+        if cnt >= SHARE_NEEDED:
+            bot.answer_callback_query(call.id,"🎉 Unlock ဖြစ်ပါပြီ!",show_alert=True)
+            try: bot.delete_message(uid,call.message.message_id)
+            except: pass
+            bot.send_message(uid,
+                f"✅ *{SHARE_NEEDED} ယောက် ပြည့်ပါပြီ! Unlock ဖြစ်ပါပြီ!* 🎉\n\n"
+                f"🔍 ဖူးစာရှာမည် ကိုနှိပ်ပြီး ရှာနိုင်ပါပြီ 💖",
+                parse_mode="Markdown", reply_markup=kb(uid))
+            pid = pm_get(uid)
+            if pid:
+                pm_clear(uid)
+                try_deliver_match(uid, pid)
+        else:
+            bot.answer_callback_query(call.id,
+                f"ကျန်သေးသည် {SHARE_NEEDED-cnt} ယောက်。ဆက်ဖိတ်ကြားပါ!",
+                show_alert=True)
+        return
+
+    # reset
+    elif d == "do_reset":
+        try: bot.delete_message(uid,call.message.message_id)
+        except: pass
+        ask_reset(call.message)
+        return
+
+    elif d == "reset_go":
+        try: bot.delete_message(uid,call.message.message_id)
+        except: pass
+        do_reset(call.message)
+        return
+
+    elif d == "reset_no":
+        bot.answer_callback_query(call.id,"မလုပ်တော့ပါ 👍")
+        try: bot.delete_message(uid,call.message.message_id)
+        except: pass
+        return
+
+    # delete
+    elif d == "do_delete":
+        try: bot.delete_message(uid,call.message.message_id)
+        except: pass
+        mk = InlineKeyboardMarkup()
+        mk.row(InlineKeyboardButton("✅ ဟုတ်ကဲ့ ဖျက်မည်",callback_data="del_yes"),
+               InlineKeyboardButton("❌ မဖျက်တော့ပါ",     callback_data="del_no"))
+        bot.send_message(uid,"⚠️ Profile ဖျက်မှာ သေချာပါသလား?",reply_markup=mk)
+        return
+
+    elif d == "del_yes":
+        try: bot.delete_message(uid,call.message.message_id)
+        except: pass
+        clear_reg(uid)
+        db_delete(uid)
+        bot.send_message(uid,
+            "🗑 Profile ဖျက်ပြီးပါပြီ。\n/start နှိပ်ပြီး ပြန်မှတ်ပုံတင်နိုင်ပါသည်。",
+            reply_markup=ReplyKeyboardRemove())
+        return
+
+    elif d == "del_no":
+        bot.answer_callback_query(call.id,"မဖျက်တော့ပါ 👍")
+        try: bot.delete_message(uid,call.message.message_id)
+        except: pass
+        return
+
+    # edit field
+    elif d.startswith("e_"):
+        field = d[2:]
+        try: bot.delete_message(uid,call.message.message_id)
+        except: pass
+        clear_reg(uid)
+        if field == 'photo':
+            msg = bot.send_message(uid,"📸 ဓာတ်ပုံအသစ် ပေးပို့ပါ-",
+                                   reply_markup=ReplyKeyboardRemove())
+            bot.register_next_step_handler(msg, save_edit, 'photo')
+        else:
+            label = EDIT_LABELS.get(field, field)
+            msg = bot.send_message(uid,
+                f"📝 *{label}* အသစ် ရိုက်ထည့်ပါ-\n"
+                f"_(/skip — မပြောင်းဘဲ ကျော်ရန်)_",
+                parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+            bot.register_next_step_handler(msg, save_edit, field)
+        return
+
+    # invite
+    elif d == "my_invite":
+        cnt  = db_ref_count(uid)
+        link = inv_link(uid)
+        mk = InlineKeyboardMarkup()
+        mk.row(InlineKeyboardButton("📤 Share လုပ်မည်",
+               url=(f"https://t.me/share/url?url={link}"
+                    f"&text=✨+Yay+Zat+Bot+မှာ+ဖူးစာရှာနိုင်ပါတယ်+💖")))
+        bot.send_message(uid,
+            f"🔗 *Invite Link*\n\n`{link}`\n\n"
+            f"👥 Join ဖြစ်သူ : *{cnt}/{SHARE_NEEDED}*\n"
+            + ("✅ Unlock ပြီး" if db_is_unlocked(uid) else f"🔒 {SHARE_NEEDED-cnt} ကျန်"),
+            parse_mode="Markdown", reply_markup=mk)
+        return
+
+    # skip match
+    elif d == "skip":
+        try: bot.delete_message(uid,call.message.message_id)
+        except: pass
+        find_match(call.message)
+        return
+
+    # like
+    elif d.startswith("like_"):
+        tid = int(d[5:])
+        try: bot.delete_message(uid,call.message.message_id)
+        except: pass
+        if not check_ch(uid):
+            bot.answer_callback_query(call.id,"⚠️ Channel ကို Join ပါ!",show_alert=True); return
+        me = db_get(uid) or {}
+        lnm = sf(me,'name','တစ်ယောက်')
+        am = InlineKeyboardMarkup()
+        am.row(InlineKeyboardButton("✅ လက်ခံမည်",callback_data=f"accept_{uid}"),
+               InlineKeyboardButton("❌ ငြင်းမည်", callback_data="decline"))
+        cap = (f"💌 *'{lnm}'* က သင့်ကို Like လုပ်ထားပါတယ်!\n\n"
+               + fmt(me, title='👤 *သူ/သူမ ရဲ့ Profile*'))
+        try:
+            if me.get('photo'):
+                bot.send_photo(tid, me['photo'], caption=cap,
+                               reply_markup=am, parse_mode="Markdown")
+            else:
+                bot.send_message(tid, cap, reply_markup=am, parse_mode="Markdown")
+            bot.send_message(uid,
+                "❤️ Like လုပ်လိုက်ပါပြီ!\nတစ်ဖက်က လက်ခံရင် အကြောင်းကြားပေးပါမယ် 😊",
+                reply_markup=kb(uid))
+        except Exception as e:
+            err_notify('like/send',e,uid)
+            bot.send_message(uid,"⚠️ တစ်ဖက်လူမှာ Bot Block ထားသဖြင့် ပေးပို့မရပါ。",
+                             reply_markup=kb(uid))
+        return
+
+    # accept
+    elif d.startswith("accept_"):
+        liker = int(d[7:])
+        try: bot.delete_message(uid,call.message.message_id)
+        except: pass
+        notify_admin(
+            f"💖 *Match!* [A](tg://user?id={uid}) + [B](tg://user?id={liker})\n"
+            f"⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+        # deliver to both — link only if unlocked, else pending
+        try_deliver_match(uid, liker)
+        try_deliver_match(liker, uid)
+        return
+
+    # decline
+    elif d == "decline":
+        try: bot.delete_message(uid,call.message.message_id)
+        except: pass
+        bot.send_message(uid,"❌ ငြင်းဆန်လိုက်ပါပြီ。",reply_markup=kb(uid))
+        return
+
+    # report
+    elif d.startswith("rpt_"):
+        tid = int(d[4:])
+        db_report(uid,tid)
+        bot.answer_callback_query(call.id,"🚩 Report လုပ်ပြီး。",show_alert=True)
+        try: bot.delete_message(uid,call.message.message_id)
+        except: pass
+        notify_admin(
+            f"🚩 *Report*\n`{uid}` {sf(db_get(uid),'name')} → "
+            f"`{tid}` {sf(db_get(tid),'name')}")
+        return
+
+    # admin
+    elif d == "adm_stats" and uid == ADMIN_ID:
+        show_stats(call.message); return
+    elif d == "adm_users" and uid == ADMIN_ID:
+        rows = db_all()[:30]
+        lines = [f"{i}. {sf(u,'name')} `{u['user_id']}` ⭐{u.get('stars',0)} "
+                 f"{'🔓' if db_is_unlocked(u['user_id']) else '🔒'}"
+                 for i,u in enumerate(rows,1)]
+        bot.send_message(ADMIN_ID,
+            "👥 *User List*\n\n"+("\n".join(lines) or "မရှိသေး"),
+            parse_mode="Markdown"); return
+    elif d == "adm_bcast" and uid == ADMIN_ID:
+        msg = bot.send_message(ADMIN_ID,"📢 Message (/cancel)-")
+        bot.register_next_step_handler(msg,_bcast); return
+    elif d == "adm_del" and uid == ADMIN_ID:
+        msg = bot.send_message(ADMIN_ID,"🗑 User ID (/cancel)-")
+        bot.register_next_step_handler(msg,_del_u); return
+    elif d == "adm_unlock" and uid == ADMIN_ID:
+        msg = bot.send_message(ADMIN_ID,"🔓 Unlock မည့် User ID (/cancel)-")
+        bot.register_next_step_handler(msg,_unlock_u); return
+
+    try: bot.answer_callback_query(call.id)
     except: pass
-    bot.answer_callback_query(c.id, "ပယ်ဖျက်ပြီး")
 
-print("✅ Yay Zat Bot Started Successfully")
+# ═══════════════════════════════════════
+# AUTO-RESTART POLLING
+# ═══════════════════════════════════════
+print(f"✅ Yay Zat Bot [{datetime.now().strftime('%d/%m/%Y %H:%M')}]")
+notify_admin(f"🟢 *Bot Online*\n⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
 while True:
     try:
-        bot.polling(none_stop=True, interval=1, timeout=30)
-    except KeyboardInterrupt:
-        break
+        bot.polling(none_stop=True, interval=0,
+                    timeout=40, long_polling_timeout=40)
     except Exception as e:
-        print(f"Polling Error: {e}")
-        time.sleep(5)
+        msg = (f"🔴 *Polling Error — Restarting...*\n"
+               f"`{type(e).__name__}: {e}`\n"
+               f"⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+        print(msg)
+        try:
+            _req.post(
+                f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+                json={"chat_id":ADMIN_ID,"text":msg,"parse_mode":"Markdown"},
+                timeout=8)
+        except: pass
+        time.sleeexcept
