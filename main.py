@@ -12,7 +12,7 @@ from telebot.types import (
 # CONFIG
 # ══════════════════════════════════════════
 TOKEN        = '8651910143:AAFd0mv_MWn_wjnvx6H0brIXXHEtZJ_zvEc'
-CHANNEL_ID   = -1003641016541
+CHANNEL_ID   = -1003923468164
 CHANNEL_LINK = "https://t.me/yayzatofficial"
 ADMIN_ID     = 6131831207
 BOT_USERNAME = "YayZatBot"       # @ မပါ — ပြောင်းထည့်ပါ
@@ -154,12 +154,27 @@ UF = ['name','age','zodiac','city','hobby','job','bio',
       'gender','looking_gender','looking_zodiac','photo']
 
 def db_get(uid):
-    try:
-        r = xr('SELECT * FROM users WHERE user_id=?', (uid,))
-        row = r.fetchone() if r else None
-        return dict(row) if row else None
-    except Exception as e:
-        err_log('db_get', e, uid); return None
+    """Return user dict or None. Never raises — logs error instead."""
+    for attempt in range(3):
+        try:
+            r = xr('SELECT * FROM users WHERE user_id=?', (uid,))
+            if r is None:
+                time.sleep(0.2); continue
+            row = r.fetchone()
+            return dict(row) if row else None
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(0.3)
+                try: open_db()
+                except: pass
+            else:
+                err_log('db_get', e, uid)
+                # IMPORTANT: return sentinel so caller knows it's a DB error,
+                # not "user doesn't exist" — use UNKNOWN constant
+                return _DB_ERROR
+    return None
+
+_DB_ERROR = object()   # sentinel — distinct from None
 
 def db_save(uid, data):
     try:
@@ -266,9 +281,13 @@ def sf(d, k, fb='—'):
     except: return fb
 
 def check_ch(uid):
-    # Bot မှာ channel admin မဟုတ်ရင် membership စစ်လို့မရ
-    # ဒါကြောင့် channel check ကို skip လုပ်ထားသည်
-    return True
+    try:
+        status = bot.get_chat_member(CHANNEL_ID, uid).status
+        return status in ('member', 'creator', 'administrator')
+    except Exception as e:
+        # Bot မှာ admin permission မရှိရင် error ဖြစ်မည် — pass through
+        err_log('check_ch', e, uid)
+        return False
 
 def admin_msg(txt):
     try: bot.send_message(ADMIN_ID, txt, parse_mode="Markdown")
@@ -533,7 +552,16 @@ def cmd_start(message):
     try: bot.clear_step_handler_by_chat_id(uid)
     except: pass
 
-    if db_get(uid):
+    user = db_get(uid)
+
+    # DB error — don't treat as new user, show retry message
+    if user is _DB_ERROR:
+        bot.send_message(uid,
+            "⚠️ ခဏစောင့်ပြီး ထပ်ကြိုးစားကြည့်ပါ。",
+            reply_markup=kb(uid))
+        return
+
+    if user:
         mk = InlineKeyboardMarkup()
         mk.row(InlineKeyboardButton("📢 Channel Join မည်", url=CHANNEL_LINK))
         bot.send_message(uid,
@@ -545,6 +573,7 @@ def cmd_start(message):
             reply_markup=mk)
         return
 
+    # Genuinely new user
     try:
         fn = message.from_user.first_name or ''
         ln = message.from_user.last_name  or ''
@@ -564,9 +593,19 @@ def cmd_start(message):
 def find_match(message):
     uid = message.chat.id
     me  = db_get(uid)
+    if me is _DB_ERROR:
+        bot.send_message(uid,"⚠️ ခဏစောင့်ပြီး ထပ်ကြိုးစားကြည့်ပါ。",reply_markup=kb(uid)); return
     if not me:
         bot.send_message(uid, "/start နှိပ်ပြီး Profile ဦးတည်ဆောက်ပါ。",
                          reply_markup=kb(uid)); return
+
+    if not check_ch(uid):
+        mk = InlineKeyboardMarkup()
+        mk.add(InlineKeyboardButton("📢 Channel Join မည်", url=CHANNEL_LINK))
+        bot.send_message(uid,
+            "⚠️ ဖူးစာရှာရန် ကျွန်ုပ်တို့ Channel ကို အရင် Join ပေးပါ 🙏",
+            reply_markup=mk)
+        return
 
     seen  = db_seen_get(uid)
     rptd  = db_reported_by(uid)
@@ -620,6 +659,8 @@ def find_match(message):
 def show_profile(message):
     uid = message.chat.id
     tp  = db_get(uid)
+    if tp is _DB_ERROR:
+        bot.send_message(uid,"⚠️ ခဏစောင့်ပြီး ထပ်ကြိုးစားကြည့်ပါ。",reply_markup=kb(uid)); return
     if not tp:
         bot.send_message(uid, "Profile မရှိသေးပါ။ /start နှိပ်ပါ。",
                          reply_markup=kb(uid)); return
