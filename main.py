@@ -284,10 +284,15 @@ def check_ch(uid):
     try:
         status = bot.get_chat_member(CHANNEL_ID, uid).status
         return status in ('member', 'creator', 'administrator')
-    except Exception as e:
-        # Bot မှာ admin permission မရှိရင် error ဖြစ်မည် — pass through
-        err_log('check_ch', e, uid)
-        return False
+    except telebot.apihelper.ApiTelegramException as e:
+        # "user not found" = not a member
+        if "user not found" in str(e).lower():
+            return False
+        # other API errors (bot not admin, etc) = don't block user
+        return True
+    except Exception:
+        # Network error etc = don't block user
+        return True
 
 def admin_msg(txt):
     try: bot.send_message(ADMIN_ID, txt, parse_mode="Markdown")
@@ -967,35 +972,59 @@ def on_cb(call):
     except: pass
 
 # ══════════════════════════════════════════
+# ══════════════════════════════════════════
 # NEVER-STOP POLLING
 # ══════════════════════════════════════════
 print(f"✅ Yay Zat Bot [{datetime.now().strftime('%d/%m/%Y %H:%M')}]")
 admin_msg(f"🟢 *Bot Online*\n⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
-RETRY_DELAY = 3   # seconds between retries
+import requests.exceptions
 
 while True:
     try:
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Polling start...")
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Polling...")
         bot.polling(
-            none_stop   = True,
-            interval    = 0,
-            timeout     = 45,
-            long_polling_timeout = 45,
+            none_stop            = True,
+            interval             = 0,
+            timeout              = 30,        # HTTP timeout
+            long_polling_timeout = 20,        # Telegram long poll wait
         )
     except KeyboardInterrupt:
-        print("Bot stopped by user.")
+        print("Stopped.")
         sys.exit(0)
-    except Exception as e:
-        msg = (f"🔴 *Polling Crashed*\n"
-               f"`{type(e).__name__}: {str(e)[:300]}`\n"
-               f"⏰ {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n"
-               f"🔄 {RETRY_DELAY}s နောက် ပြန်စမည်...")
-        print(msg)
-        send_admin_raw(msg)
+
+    except (requests.exceptions.ReadTimeout,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.Timeout) as e:
+        # ── ဒါပုံမှန် network hiccup — Admin မပို့ဘဲ 5s နောက် ဆက်သည် ──
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Network error (normal): {e}")
         try: bot.stop_polling()
         except: pass
-        time.sleep(RETRY_DELAY)
-        # Reconnect DB
+        time.sleep(5)
+        try: open_db()
+        except: pass
+
+    except Exception as e:
+        # ── တကယ့် unexpected error သာ Admin ထံပို့သည် ──
+        err_str = str(e)
+        # 409 conflict = instance တစ်ခုထက်မို run နေတာ
+        if "409" in err_str:
+            send_admin_raw(
+                "⚠️ *Error 409 — Bot instance တစ်ခုထက်မို run နေသည်*\n"
+                "Heroku မှာ `heroku ps:scale worker=1` ပြေးပြီး\n"
+                "`https://api.telegram.org/bot<TOKEN>/deleteWebhook` ကိုဖွင့်ပါ\n"
+                f"⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+            )
+            time.sleep(30)  # 409 ဆိုရင် ကြာကြာစောင့်
+        else:
+            msg = (f"🔴 *Polling Error*\n"
+                   f"`{type(e).__name__}: {err_str[:200]}`\n"
+                   f"⏰ {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+            print(msg)
+            send_admin_raw(msg)
+            time.sleep(5)
+
+        try: bot.stop_polling()
+        except: pass
         try: open_db()
         except: pass
