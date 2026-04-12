@@ -1,7 +1,7 @@
 """
 Yay Zat Zodiac Bot — Never-Stop Edition
 """
-import telebot, sqlite3, threading, traceback, time, requests as _req, sys, os
+import telebot, threading, traceback, time, requests as _req, sys, os
 from datetime import datetime
 from telebot.types import (
     InlineKeyboardMarkup, InlineKeyboardButton,
@@ -76,56 +76,79 @@ def safe_handler(fn):
     return wrapper
 
 # ══════════════════════════════════════════
-# DATABASE
+# DATABASE — PostgreSQL (Neon)
 # ══════════════════════════════════════════
-DB  = 'yayzat.db'
-_lk = threading.Lock()
-_db = None
+import psycopg2
+import psycopg2.pool
+import psycopg2.extras
+
+DATABASE_URL = "postgresql://neondb_owner:npg_WdLQ5BPOKte1@ep-shy-glitter-ansok73s-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+
+_pool = None
+_lk   = threading.Lock()
 
 def open_db():
-    global _db
-    c = sqlite3.connect(DB, check_same_thread=False, timeout=20)
-    c.row_factory = sqlite3.Row
-    c.execute("PRAGMA journal_mode=WAL")
-    c.execute("PRAGMA busy_timeout=8000")
-    c.execute("PRAGMA synchronous=NORMAL")
-    _db = c
+    global _pool
+    _pool = psycopg2.pool.ThreadedConnectionPool(
+        minconn=1, maxconn=10,
+        dsn=DATABASE_URL,
+        cursor_factory=psycopg2.extras.RealDictCursor
+    )
 
 open_db()
 
+def _get_conn():
+    global _pool
+    for attempt in range(3):
+        try:
+            return _pool.getconn()
+        except Exception:
+            try: open_db()
+            except: pass
+            time.sleep(0.5)
+    raise Exception("DB connection failed")
+
+def _put_conn(conn):
+    try: _pool.putconn(conn)
+    except: pass
+
 def xq(sql, p=()):
-    global _db
-    with _lk:
-        for attempt in range(5):
-            try:
-                r = _db.execute(sql, p)
-                _db.commit()
-                return r
-            except sqlite3.OperationalError as e:
-                if attempt < 4:
-                    try: open_db()
-                    except: pass
-                    time.sleep(0.3 * (attempt + 1))
-                else:
-                    raise
+    """Write query — auto-commit"""
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, p)
+        conn.commit()
+    except Exception:
+        try: conn.rollback()
+        except: pass
+        raise
+    finally:
+        _put_conn(conn)
 
 def xr(sql, p=()):
-    global _db
-    with _lk:
-        for attempt in range(5):
-            try:
-                return _db.execute(sql, p)
-            except sqlite3.OperationalError:
-                if attempt < 4:
-                    try: open_db()
-                    except: pass
-                    time.sleep(0.3 * (attempt + 1))
-                else:
-                    return None
+    """Read query — returns list of RealDictRow"""
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, p)
+            return cur.fetchall()
+    finally:
+        _put_conn(conn)
+
+def xr1(sql, p=()):
+    """Read single row"""
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, p)
+            return cur.fetchone()
+    finally:
+        _put_conn(conn)
 
 def init_db():
     xq('''CREATE TABLE IF NOT EXISTS users (
-        user_id        INTEGER PRIMARY KEY,
+        user_id        BIGINT PRIMARY KEY,
         name           TEXT,
         age            TEXT,
         zodiac         TEXT,
@@ -137,14 +160,14 @@ def init_db():
         looking_gender TEXT,
         looking_zodiac TEXT,
         photo          TEXT,
-        created_at     TEXT DEFAULT (datetime('now','localtime'))
+        created_at     TIMESTAMPTZ DEFAULT NOW()
     )''')
     xq('''CREATE TABLE IF NOT EXISTS seen (
-        user_id INTEGER, seen_id INTEGER,
+        user_id BIGINT, seen_id BIGINT,
         PRIMARY KEY(user_id, seen_id)
     )''')
     xq('''CREATE TABLE IF NOT EXISTS reports (
-        reporter_id INTEGER, reported_id INTEGER,
+        reporter_id BIGINT, reported_id BIGINT,
         PRIMARY KEY(reporter_id, reported_id)
     )''')
 
@@ -153,53 +176,44 @@ init_db()
 UF = ['name','age','zodiac','city','hobby','job','bio',
       'gender','looking_gender','looking_zodiac','photo']
 
-def db_get(uid):
-    """Return user dict or None. Never raises — logs error instead."""
-    for attempt in range(3):
-        try:
-            r = xr('SELECT * FROM users WHERE user_id=?', (uid,))
-            if r is None:
-                time.sleep(0.2); continue
-            row = r.fetchone()
-            return dict(row) if row else None
-        except Exception as e:
-            if attempt < 2:
-                time.sleep(0.3)
-                try: open_db()
-                except: pass
-            else:
-                err_log('db_get', e, uid)
-                # IMPORTANT: return sentinel so caller knows it's a DB error,
-                # not "user doesn't exist" — use UNKNOWN constant
-                return _DB_ERROR
-    return None
-
 _DB_ERROR = object()   # sentinel — distinct from None
+
+def db_get(uid):
+    """Return user dict or None. Returns _DB_ERROR on DB failure."""
+    try:
+        row = xr1('SELECT * FROM users WHERE user_id=%s', (uid,))
+        return dict(row) if row else None
+    except Exception as e:
+        err_log('db_get', e, uid)
+        return _DB_ERROR
 
 def db_save(uid, data):
     try:
         old = db_get(uid)
-        if old and not data.get('photo') and old.get('photo'):
-            data['photo'] = old['photo']
-        cols = ','.join(UF); ph = ','.join(['?']*len(UF))
+        if old and old is not _DB_ERROR:
+            if not data.get('photo') and old.get('photo'):
+                data['photo'] = old['photo']
+        cols = ','.join(UF)
+        ph   = ','.join(['%s']*len(UF))
         vals = [data.get(f) for f in UF]
-        upd  = ','.join([f"{f}=excluded.{f}" for f in UF])
-        xq(f"INSERT INTO users (user_id,{cols}) VALUES(?,{ph}) "
-           f"ON CONFLICT(user_id) DO UPDATE SET {upd}", [uid]+vals)
+        upd  = ','.join([f"{f}=EXCLUDED.{f}" for f in UF])
+        xq(f"INSERT INTO users (user_id,{cols}) VALUES(%s,{ph}) "
+           f"ON CONFLICT (user_id) DO UPDATE SET {upd}",
+           [uid]+vals)
     except Exception as e:
         err_log('db_save', e, uid)
 
 def db_update(uid, field, val):
     try:
         if field in set(UF):
-            xq(f"UPDATE users SET {field}=? WHERE user_id=?", (val, uid))
+            xq(f"UPDATE users SET {field}=%s WHERE user_id=%s", (val, uid))
     except Exception as e:
         err_log('db_update', e, uid)
 
 def db_delete(uid):
     try:
-        xq('DELETE FROM users WHERE user_id=?', (uid,))
-        xq('DELETE FROM seen WHERE user_id=? OR seen_id=?', (uid, uid))
+        xq('DELETE FROM users WHERE user_id=%s', (uid,))
+        xq('DELETE FROM seen WHERE user_id=%s OR seen_id=%s', (uid, uid))
     except Exception as e:
         err_log('db_delete', e, uid)
 
@@ -208,42 +222,40 @@ def db_all():
     except: return []
 
 def db_ids():
-    try: return [r[0] for r in (xr('SELECT user_id FROM users') or [])]
+    try: return [r['user_id'] for r in (xr('SELECT user_id FROM users') or [])]
     except: return []
 
 def db_count():
     try:
-        r = xr('SELECT COUNT(*) FROM users')
-        return r.fetchone()[0] if r else 0
+        row = xr1('SELECT COUNT(*) AS c FROM users')
+        return row['c'] if row else 0
     except: return 0
 
 def db_seen_add(u, s):
-    try: xq('INSERT OR IGNORE INTO seen VALUES(?,?)', (u, s))
+    try: xq('INSERT INTO seen VALUES(%s,%s) ON CONFLICT DO NOTHING', (u, s))
     except: pass
 
 def db_seen_get(uid):
-    try:
-        r = xr('SELECT seen_id FROM seen WHERE user_id=?', (uid,))
-        return {x[0] for x in r} if r else set()
+    try: return {r['seen_id'] for r in (xr('SELECT seen_id FROM seen WHERE user_id=%s',(uid,)) or [])}
     except: return set()
 
 def db_seen_clear(uid):
-    try: xq('DELETE FROM seen WHERE user_id=?', (uid,))
+    try: xq('DELETE FROM seen WHERE user_id=%s', (uid,))
     except: pass
 
 def db_report(a, b):
-    try: xq('INSERT OR IGNORE INTO reports VALUES(?,?)', (a, b))
+    try: xq('INSERT INTO reports VALUES(%s,%s) ON CONFLICT DO NOTHING', (a, b))
     except: pass
 
 def db_reported_by(uid):
-    try:
-        r = xr('SELECT reported_id FROM reports WHERE reporter_id=?', (uid,))
-        return {x[0] for x in r} if r else set()
+    try: return {r['reported_id'] for r in (xr('SELECT reported_id FROM reports WHERE reporter_id=%s',(uid,)) or [])}
     except: return set()
 
 def db_stats():
     try:
-        def n(q): r=xr(q); return r.fetchone()[0] if r else 0
+        def n(q):
+            row = xr1(q)
+            return list(row.values())[0] if row else 0
         return {
             'total' : n('SELECT COUNT(*) FROM users'),
             'male'  : n("SELECT COUNT(*) FROM users WHERE gender='Male'"),
@@ -345,8 +357,8 @@ def share_prompt(uid):
                 f"&text=✨+Yay+Zat+Bot+မှာ+ဖူးစာ+ရှာနိုင်ပါတယ်+💖"))
         m.row(InlineKeyboardButton("🔍 ဆက်ရှာမည်", callback_data="continue_find"))
         bot.send_message(uid,
-            "🙏 Bot ကို မိတ်ဆွေ *၇ ယောက်* ကို Share ပေးပါ!\n"
-            "Share မြဲ Bot ကြီးထွားပြီး ရှာဖွေမှု ပိုကောင်းလာမည် 😊",
+            "🙏 Bot ကို မိတ်ဆွေ *၇ ယောက်* ကို Share ပေးမှသာ\n"
+            "နောက်တစ်ကြိမ် Match ရှာနိုင်မည်ဖြစ်ပါသည် 😊",
             parse_mode="Markdown", reply_markup=m)
     except Exception as e:
         err_log('share_prompt', e, uid)
@@ -1001,7 +1013,7 @@ while True:
         try: bot.stop_polling()
         except: pass
         time.sleep(5)
-        try: open_db()
+        try: open_db()   # reconnect pool
         except: pass
 
     except Exception as e:
