@@ -989,6 +989,15 @@ def on_cb(call):
 print(f"✅ Yay Zat Bot [{datetime.now().strftime('%d/%m/%Y %H:%M')}]")
 admin_msg(f"🟢 *Bot Online*\n⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
+# ── Neon keep-alive — sleep မချအောင် 4 min တစ်ကြိမ် ping ──
+def _db_keepalive():
+    while True:
+        time.sleep(240)   # 4 minutes
+        try: xr1('SELECT 1')
+        except: pass
+
+threading.Thread(target=_db_keepalive, daemon=True).start()
+
 import requests.exceptions
 
 while True:
