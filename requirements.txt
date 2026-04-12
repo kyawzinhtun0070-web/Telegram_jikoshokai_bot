@@ -1,2 +1,4 @@
-pyTelegramBotAPI==4.15.0
-requests==2.31.0
+pyTelegramBotAPI
+psycopg2-binary
+requests
+
