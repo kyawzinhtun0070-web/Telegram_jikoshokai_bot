@@ -82,7 +82,7 @@ import psycopg2
 import psycopg2.pool
 import psycopg2.extras
 
-DATABASE_URL = "postgresql://neondb_owner:npg_WdLQ5BPOKte1@ep-shy-glitter-ansok73s-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+DATABASE_URL = "postgresql://neondb_owner:npg_UoRaO9AHuLS7@ep-young-sky-a1ayekiz-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
 _pool = None
 _lk   = threading.Lock()
