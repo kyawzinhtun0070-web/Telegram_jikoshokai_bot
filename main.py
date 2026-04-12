@@ -15,7 +15,7 @@ TOKEN        = '8651910143:AAFd0mv_MWn_wjnvx6H0brIXXHEtZJ_zvEc'
 CHANNEL_ID   = -1003923468164
 CHANNEL_LINK = "https://t.me/yayzatofficial"
 ADMIN_ID     = 6131831207
-BOT_USERNAME = "YayZatBot"       # @ မပါ — ပြောင်းထည့်ပါ
+BOT_USERNAME = "yay_zat_zodiac_bot"  # @ မပါ
 HEART_STICKER = ""               # heart sticker file_id (ဗလာဆိုရင် emoji သုံးမည်)
 
 ZODIACS = ['Aries','Taurus','Gemini','Cancer','Leo','Virgo',
@@ -352,13 +352,12 @@ def share_prompt(uid):
         link = f"https://t.me/{BOT_USERNAME}"
         m = InlineKeyboardMarkup()
         m.row(InlineKeyboardButton(
-            "📤 မိတ်ဆွေ ၇ ယောက်ကို Share လုပ်မည်",
+            "📤 မိတ်ဆွေများကို Share လုပ်မည်",
             url=f"https://t.me/share/url?url={link}"
-                f"&text=✨+Yay+Zat+Bot+မှာ+ဖူးစာ+ရှာနိုင်ပါတယ်+💖"))
-        m.row(InlineKeyboardButton("🔍 ဆက်ရှာမည်", callback_data="continue_find"))
+                f"&text=✨+Yay+Zat+Zodiac+Bot+မှာ+ဖူးစာရှာနိုင်ပါတယ်+💖"))
         bot.send_message(uid,
-            "🙏 Bot ကို မိတ်ဆွေ *၇ ယောက်* ကို Share ပေးမှသာ\n"
-            "နောက်တစ်ကြိမ် Match ရှာနိုင်မည်ဖြစ်ပါသည် 😊",
+            "🙏 Bot ကို မိတ်ဆွေများကို Share ပေးပါ!\n"
+            "_(မဖြစ်မနေ မဟုတ်ပါ — ကျေးဇူးတင်ပါသည် 😊)_",
             parse_mode="Markdown", reply_markup=m)
     except Exception as e:
         err_log('share_prompt', e, uid)
