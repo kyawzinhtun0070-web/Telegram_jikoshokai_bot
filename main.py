@@ -857,7 +857,8 @@ def on_cb(call):
         else:
             bot.send_message(uid, "❤️")
 
-        me  = db_get(uid) or {}
+        me  = db_get(uid)
+        if me is _DB_ERROR or not me: me = {}
         lnm = sf(me,'name','တစ်ယောက်')
         mk  = InlineKeyboardMarkup()
         mk.row(InlineKeyboardButton("✅ လက်ခံမည်", callback_data=f"accept_{uid}"),
@@ -885,8 +886,7 @@ def on_cb(call):
     # ── Accept ────────────────────────────────────────────────
     elif d.startswith("accept_"):
         liker = int(d[7:])
-        try: bot.delete_message(uid, call.message.message_id)
-        except: pass
+        # profile message ကို မဖျက်ဘဲ ထားပါ — user မြင်နေနိုင်အောင်
 
         admin_msg(f"💖 *Match!*\n"
                   f"[A](tg://user?id={uid}) + [B](tg://user?id={liker})\n"
@@ -1052,8 +1052,7 @@ while True:
         if "409" in err_str:
             send_admin_raw(
                 "⚠️ *Error 409 — Bot instance တစ်ခုထက်မို run နေသည်*\n"
-                "Heroku မှာ `heroku ps:scale worker=1` ပြေးပြီး\n"
-                "`https://api.telegram.org/bot<TOKEN>/deleteWebhook` ကိုဖွင့်ပါ\n"
+                "Koyeb မှာ instance တစ်ခုပဲ run နေအောင် စစ်ဆေးပါ\n"
                 f"⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}"
             )
             time.sleep(30)  # 409 ဆိုရင် ကြာကြာစောင့်
