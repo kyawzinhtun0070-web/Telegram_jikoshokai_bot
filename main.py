@@ -919,10 +919,19 @@ def on_cb(call):
         for me, partner in [(uid, liker),(liker, uid)]:
             pd = db_get(partner)
             pname = sf(pd,'name','ဖူးစာရှင်') if pd and pd is not _DB_ERROR else 'ဖူးစာရှင်'
+            # username ကို real-time စစ်တယ် — DB ပြောင်းစရာမလိုဘူး
+            try:
+                chat = bot.get_chat(partner)
+                uname = chat.username
+            except: uname = None
+            if uname:
+                link_text = f"[{pname} နဲ့ စကားပြောရန် ဒီမှာနှိပ်ပါ](https://t.me/{uname})"
+            else:
+                link_text = f"[{pname} နဲ့ စကားပြောရန် ဒီမှာနှိပ်ပါ](tg://user?id={partner})"
             try:
                 bot.send_message(me,
                     f"💖 *Match ဖြစ်သွားပါပြီ!*\n\n"
-                    f"[{pname} နဲ့ စကားပြောရန် ဒီမှာနှိပ်ပါ](tg://user?id={partner}) 🎉",
+                    f"{link_text} 🎉",
                     parse_mode="Markdown", reply_markup=kb(me))
             except Exception as e:
                 err_log(f'accept/send/{me}',e,me)
