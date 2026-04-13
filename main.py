@@ -170,6 +170,11 @@ def init_db():
         reporter_id BIGINT, reported_id BIGINT,
         PRIMARY KEY(reporter_id, reported_id)
     )''')
+    # Indexes — query မြန်အောင်
+    xq('CREATE INDEX IF NOT EXISTS idx_seen_user ON seen(user_id)')
+    xq('CREATE INDEX IF NOT EXISTS idx_reports_reporter ON reports(reporter_id)')
+    xq('CREATE INDEX IF NOT EXISTS idx_users_gender ON users(gender)')
+    xq('CREATE INDEX IF NOT EXISTS idx_users_zodiac ON users(zodiac)')
 
 init_db()
 
@@ -650,12 +655,22 @@ def find_match(message):
     lg    = (me.get('looking_gender') or '').strip()
     lz    = (me.get('looking_zodiac')  or '').strip()
 
-    pool = []
-    for u in db_all():
-        if u['user_id'] in excl: continue
-        if lg and lg not in ('Both','Any'):
-            if (u.get('gender') or '').strip() != lg: continue
-        pool.append(u)
+    # DB query ထဲမှာပဲ filter လုပ် — Python loop မလို
+    excl_list = list(excl) if excl else [-1]
+    ph = ','.join(['%s']*len(excl_list))
+
+    if lg and lg not in ('Both','Any'):
+        rows = xr(
+            f"SELECT * FROM users WHERE user_id NOT IN ({ph}) AND gender=%s",
+            excl_list + [lg]
+        )
+    else:
+        rows = xr(
+            f"SELECT * FROM users WHERE user_id NOT IN ({ph})",
+            excl_list
+        )
+
+    pool = [dict(r) for r in (rows or [])]
 
     if not pool:
         if seen:
@@ -894,12 +909,13 @@ def on_cb(call):
 
         for me, partner in [(uid, liker),(liker, uid)]:
             pd = db_get(partner)
+            pname = sf(pd,'name','ဖူးစာရှင်') if pd and pd is not _DB_ERROR else 'ဖူးစာရှင်'
             try:
                 bot.send_message(me,
-                    f"💖 *Match ဖြစ်သွားပါပြီ!*\n\n"
-                    f"[ဒီမှာနှိပ်ပြီး](tg://user?id={partner}) "
-                    f"{sf(pd,'name','ဖူးစာရှင်')} နဲ့ စကားပြောနိုင်ပါပြီ 🎉",
-                    parse_mode="Markdown", reply_markup=kb(me))
+                    f"💖 <b>Match ဖြစ်သွားပါပြီ!</b>\n\n"
+                    f"<a href='tg://user?id={partner}'>{pname}</a> နဲ့ "
+                    f"စကားပြောနိုင်ပါပြီ 🎉",
+                    parse_mode="HTML", reply_markup=kb(me))
             except Exception as e:
                 err_log(f'accept/send/{me}',e,me)
         # share prompt
