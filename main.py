@@ -919,14 +919,11 @@ def on_cb(call):
         for me, partner in [(uid, liker),(liker, uid)]:
             pd = db_get(partner)
             pname = sf(pd,'name','ဖူးစာရှင်') if pd and pd is not _DB_ERROR else 'ဖူးစာရှင်'
-            puname = sf(pd,'tg_username','') if pd and pd is not _DB_ERROR else ''
-            link = f"https://t.me/{puname}" if puname and puname != '—' else f"tg://user?id={partner}"
             try:
                 bot.send_message(me,
-                    f"💖 <b>Match ဖြစ်သွားပါပြီ!</b>\n\n"
-                    f"<a href='{link}'>{pname}</a> နဲ့ "
-                    f"စကားပြောနိုင်ပါပြီ 🎉",
-                    parse_mode="HTML", reply_markup=kb(me))
+                    f"💖 *Match ဖြစ်သွားပါပြီ!*\n\n"
+                    f"[{pname} နဲ့ စကားပြောရန် ဒီမှာနှိပ်ပါ](tg://user?id={partner}) 🎉",
+                    parse_mode="Markdown", reply_markup=kb(me))
             except Exception as e:
                 err_log(f'accept/send/{me}',e,me)
         # share prompt
