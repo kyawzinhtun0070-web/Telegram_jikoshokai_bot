@@ -160,6 +160,7 @@ def init_db():
         looking_gender TEXT,
         looking_zodiac TEXT,
         photo          TEXT,
+        tg_username    TEXT,
         created_at     TIMESTAMPTZ DEFAULT NOW()
     )''')
     xq('''CREATE TABLE IF NOT EXISTS seen (
@@ -175,11 +176,18 @@ def init_db():
     xq('CREATE INDEX IF NOT EXISTS idx_reports_reporter ON reports(reporter_id)')
     xq('CREATE INDEX IF NOT EXISTS idx_users_gender ON users(gender)')
     xq('CREATE INDEX IF NOT EXISTS idx_users_zodiac ON users(zodiac)')
+    # safe column migration
+    existing = {r['column_name'] for r in (xr(
+        "SELECT column_name FROM information_schema.columns WHERE table_name='users'"
+    ) or [])}
+    if 'tg_username' not in existing:
+        try: xq('ALTER TABLE users ADD COLUMN tg_username TEXT')
+        except: pass
 
 init_db()
 
 UF = ['name','age','zodiac','city','hobby','job','bio',
-      'gender','looking_gender','looking_zodiac','photo']
+      'gender','looking_gender','looking_zodiac','photo','tg_username']
 
 _DB_ERROR = object()   # sentinel — distinct from None
 
@@ -619,14 +627,15 @@ def cmd_start(message):
     try:
         fn = message.from_user.first_name or ''
         ln = message.from_user.last_name  or ''
-        tg = message.from_user.username or str(uid)
-    except: fn=ln=tg=str(uid)
+        tg = message.from_user.username or ''
+    except: fn=ln=tg=''
 
     admin_msg(f"🆕 *User သစ် ဝင်ရောက်လာပြီ*\n"
               f"👤 {fn} {ln} @{tg}\n🆔 `{uid}`\n"
               f"👥 {db_count()} ယောက်\n"
               f"⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-    begin_reg(uid, message)
+    # tg_username ကို prefill မှာ သိမ်းပါ
+    begin_reg(uid, message, prefill={'tg_username': tg} if tg else None)
 
 # ══════════════════════════════════════════
 # FIND MATCH
@@ -910,10 +919,12 @@ def on_cb(call):
         for me, partner in [(uid, liker),(liker, uid)]:
             pd = db_get(partner)
             pname = sf(pd,'name','ဖူးစာရှင်') if pd and pd is not _DB_ERROR else 'ဖူးစာရှင်'
+            puname = sf(pd,'tg_username','') if pd and pd is not _DB_ERROR else ''
+            link = f"https://t.me/{puname}" if puname and puname != '—' else f"tg://user?id={partner}"
             try:
                 bot.send_message(me,
                     f"💖 <b>Match ဖြစ်သွားပါပြီ!</b>\n\n"
-                    f"<a href='tg://user?id={partner}'>{pname}</a> နဲ့ "
+                    f"<a href='{link}'>{pname}</a> နဲ့ "
                     f"စကားပြောနိုင်ပါပြီ 🎉",
                     parse_mode="HTML", reply_markup=kb(me))
             except Exception as e:
