@@ -895,6 +895,19 @@ def on_cb(call):
                 "❤️ Like လုပ်လိုက်ပါပြီ!\n"
                 "တစ်ဖက်က လက်ခံရင် အကြောင်းကြားပေးပါမယ် 😊",
                 reply_markup=kb(uid))
+        except telebot.apihelper.ApiTelegramException as e:
+            if "bot was blocked" in str(e).lower() or "user is deactivated" in str(e).lower():
+                # Block ထားတဲ့ user — seen list ထည့်ပြီး ကျော်သွားပါ
+                db_seen_add(uid, tid)
+                bot.send_message(uid,
+                    "⏭ တစ်ဖက်လူမှာ Bot Block ထားသဖြင့် နောက်တစ်ယောက် ဆက်ရှာပေးပါမယ်...",
+                    reply_markup=kb(uid))
+                find_match(call.message)
+            else:
+                err_log('like/send',e,uid)
+                bot.send_message(uid,
+                    "⚠️ တစ်ဖက်လူမှာ Bot Block ထားသဖြင့် မပို့နိုင်ပါ။",
+                    reply_markup=kb(uid))
         except Exception as e:
             err_log('like/send',e,uid)
             bot.send_message(uid,
@@ -919,20 +932,25 @@ def on_cb(call):
         for me, partner in [(uid, liker),(liker, uid)]:
             pd = db_get(partner)
             pname = sf(pd,'name','ဖူးစာရှင်') if pd and pd is not _DB_ERROR else 'ဖူးစာရှင်'
-            # username ကို real-time စစ်တယ် — DB ပြောင်းစရာမလိုဘူး
+            # username ကို real-time စစ်တယ်
             try:
                 chat = bot.get_chat(partner)
                 uname = chat.username
             except: uname = None
+
             if uname:
-                link_text = f"[{pname} နဲ့ စကားပြောရန် ဒီမှာနှိပ်ပါ](https://t.me/{uname})"
+                link = f"https://t.me/{uname}"
             else:
-                link_text = f"[{pname} နဲ့ စကားပြောရန် ဒီမှာနှိပ်ပါ](tg://user?id={partner})"
+                link = f"tg://user?id={partner}"
+
+            # HTML သုံးတယ် — မြန်မာစာပါရင်လည်း link မပျောက်ဘူး
+            import html as _html
+            safe_name = _html.escape(pname)
             try:
                 bot.send_message(me,
-                    f"💖 *Match ဖြစ်သွားပါပြီ!*\n\n"
-                    f"{link_text} 🎉",
-                    parse_mode="Markdown", reply_markup=kb(me))
+                    f"💖 <b>Match ဖြစ်သွားပါပြီ!</b>\n\n"
+                    f"<a href='{link}'>{safe_name} နဲ့ စကားပြောရန် ဒီမှာနှိပ်ပါ</a> 🎉",
+                    parse_mode="HTML", reply_markup=kb(me))
             except Exception as e:
                 err_log(f'accept/send/{me}',e,me)
         # share prompt
