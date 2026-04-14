@@ -925,9 +925,24 @@ def on_cb(call):
         liker = int(d[7:])
         # profile message ကို မဖျက်ဘဲ ထားပါ — user မြင်နေနိုင်အောင်
 
-        admin_msg(f"💖 *Match!*\n"
-                  f"[A](tg://user?id={uid}) + [B](tg://user?id={liker})\n"
-                  f"⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+        # admin notification — HTML နဲ့ username link သုံး
+        try:
+            chat_a = bot.get_chat(uid)
+            chat_b = bot.get_chat(liker)
+            uname_a = f"https://t.me/{chat_a.username}" if chat_a.username else f"tg://user?id={uid}"
+            uname_b = f"https://t.me/{chat_b.username}" if chat_b.username else f"tg://user?id={liker}"
+            name_a = sf(db_get(uid),'name',str(uid))
+            name_b = sf(db_get(liker),'name',str(liker))
+            import html as _html
+            admin_msg_html = (
+                f"💖 <b>Match!</b>\n\n"
+                f"<a href='{uname_a}'>{_html.escape(name_a)}</a> + "
+                f"<a href='{uname_b}'>{_html.escape(name_b)}</a>\n"
+                f"⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+            )
+            bot.send_message(ADMIN_ID, admin_msg_html, parse_mode="HTML")
+        except Exception as e:
+            err_log('match/admin_notify', e)
 
         for me, partner in [(uid, liker),(liker, uid)]:
             pd = db_get(partner)
