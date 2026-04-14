@@ -670,12 +670,12 @@ def find_match(message):
 
     if lg and lg not in ('Both','Any'):
         rows = xr(
-            f"SELECT * FROM users WHERE user_id NOT IN ({ph}) AND gender=%s",
+            f"SELECT * FROM users WHERE user_id NOT IN ({ph}) AND gender=%s ORDER BY RANDOM()",
             excl_list + [lg]
         )
     else:
         rows = xr(
-            f"SELECT * FROM users WHERE user_id NOT IN ({ph})",
+            f"SELECT * FROM users WHERE user_id NOT IN ({ph}) ORDER BY RANDOM()",
             excl_list
         )
 
