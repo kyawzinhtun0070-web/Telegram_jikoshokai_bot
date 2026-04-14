@@ -781,11 +781,20 @@ def show_admin(message):
 def _bcast(m):
     try:
         if m.text and m.text.startswith('/'): bot.send_message(ADMIN_ID,"ပယ်ဖျက်ပြီး။"); return
-        ok=fail=0
+        ok=fail=removed=0
         for uid in db_ids():
-            try: bot.send_message(uid,f"📢 *Yay Zat*\n\n{m.text}",parse_mode="Markdown"); ok+=1
+            try:
+                bot.send_message(uid,f"📢 *Yay Zat*\n\n{m.text}",parse_mode="Markdown")
+                ok+=1
+            except telebot.apihelper.ApiTelegramException as e:
+                if "bot was blocked" in str(e).lower() or "user is deactivated" in str(e).lower():
+                    db_delete(uid)
+                    removed+=1
+                else:
+                    fail+=1
             except: fail+=1
-        bot.send_message(ADMIN_ID,f"✅ {ok} ရောက် / ❌ {fail} မရောက်")
+        bot.send_message(ADMIN_ID,
+            f"✅ {ok} ရောက် / ❌ {fail} မရောက် / 🗑 {removed} Block ထားသူ ဖယ်ရှားပြီး")
     except Exception as e: err_log('_bcast',e)
 
 def _del_u(m):
@@ -897,21 +906,21 @@ def on_cb(call):
                 reply_markup=kb(uid))
         except telebot.apihelper.ApiTelegramException as e:
             if "bot was blocked" in str(e).lower() or "user is deactivated" in str(e).lower():
-                # Block ထားတဲ့ user — seen list ထည့်ပြီး ကျော်သွားပါ
-                db_seen_add(uid, tid)
+                # Block ထားတဲ့ user — DB ကနေ ထုတ်ပြီး နောက်တစ်ယောက် ဆက်ပြပါ
+                db_delete(tid)
                 bot.send_message(uid,
-                    "⏭ တစ်ဖက်လူမှာ Bot Block ထားသဖြင့် နောက်တစ်ယောက် ဆက်ရှာပေးပါမယ်...",
+                    "⏭ တစ်ဖက်လူမှာ Bot Block ထားသဖြင့် ဖယ်ရှားပြီး နောက်တစ်ယောက် ဆက်ရှာပေးပါမယ်...",
                     reply_markup=kb(uid))
                 find_match(call.message)
             else:
                 err_log('like/send',e,uid)
                 bot.send_message(uid,
-                    "⚠️ တစ်ဖက်လူမှာ Bot Block ထားသဖြင့် မပို့နိုင်ပါ။",
+                    "⚠️ တစ်ဖက်လူမှာ မပို့နိုင်ပါ။ နောက်မှ ထပ်ကြိုးစားပါ။",
                     reply_markup=kb(uid))
         except Exception as e:
             err_log('like/send',e,uid)
             bot.send_message(uid,
-                "⚠️ တစ်ဖက်လူမှာ Bot Block ထားသဖြင့် မပို့နိုင်ပါ။",
+                "⚠️ တစ်ဖက်လူမှာ မပို့နိုင်ပါ။ နောက်မှ ထပ်ကြိုးစားပါ။",
                 reply_markup=kb(uid))
 
     # ── Nope ──────────────────────────────────────────────────
